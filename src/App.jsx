@@ -392,26 +392,29 @@ export default function StudyDashboard() {
                   const totalExemptionsEarned = Math.floor(stamps / 10);
                   const progress = stamps % 10;
                   return (
-                    <div key={member} style={{ marginBottom: 14, padding: "12px", background: "#0a0f1e", borderRadius: 12, border: "1px solid #1e293b" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                        <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                          {available > 0 && <span style={{ background: "#052e16", border: "1px solid #14532d", borderRadius: 8, padding: "3px 8px", fontSize: 11, color: "#22c55e", fontWeight: 700 }}>🎫 면제권 {available}장</span>}
-                          <span style={{ fontSize: 12, color: "#64748b" }}>도장 {stamps}개</span>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 3, marginBottom: 4 }}>
-                        {Array.from({ length: 10 }, (_, i) => (
-                          <div key={i} style={{ width: 28, height: 28, borderRadius: 8, background: i < progress ? "#22c55e" : "#1e293b", border: `1px solid ${i < progress ? "#14532d" : "#334155"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, transition: "all 0.2s" }}>
-                            {i < progress ? "🟢" : "⚪"}
+                    <div key={member} style={{ marginBottom: 10, padding: "12px 14px", background: "#0a0f1e", borderRadius: 12, border: "1px solid #1e293b" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 22 }}>🏅</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                              <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
+                              <span style={{ fontSize: 12, color: "#64748b" }}>×{stamps}</span>
+                            </div>
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              {available > 0 && <span style={{ background: "#052e16", border: "1px solid #14532d", borderRadius: 8, padding: "3px 8px", fontSize: 11, color: "#22c55e", fontWeight: 700 }}>🎫 {available}장</span>}
+                              <span style={{ fontSize: 11, color: "#475569" }}>다음 면제권까지 {10 - progress}개</span>
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                      {totalExemptionsEarned > 0 && (
-                        <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
-                          누적 면제권 {totalExemptionsEarned}장 획득 · {getUsedExemptions(member)}장 사용
+                          <div style={{ background: "#1e293b", borderRadius: 99, height: 8, overflow: "hidden" }}>
+                            <div style={{ width: `${(progress / 10) * 100}%`, height: "100%", background: "linear-gradient(90deg, #22c55e, #4ade80)", borderRadius: 99, transition: "width 0.4s" }} />
+                          </div>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                            <span style={{ fontSize: 10, color: "#475569" }}>{progress}/10</span>
+                            {totalExemptionsEarned > 0 && <span style={{ fontSize: 10, color: "#475569" }}>누적 {totalExemptionsEarned}장 획득 · {getUsedExemptions(member)}장 사용</span>}
+                          </div>
                         </div>
-                      )}
+                      </div>
                     </div>
                   );
                 })}
