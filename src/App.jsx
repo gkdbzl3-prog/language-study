@@ -80,6 +80,10 @@ function getWeeksInMonth(year, month) {
 
 const FINE_MAP = { 0: 1000, 1: 700, 2: 400, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
 const BONUS_3 = 800; // 3회 이상 달성 시 기본 적립금 (4회부터 100원씩 추가)
+const [carryOverPool, setCarryOverPool] = useState(() => storage.get("study-carryover") || {});
+const [carryOverByMonth, setCarryOverByMonth] = useState(
+  () => storage.get("study-carryover") || {}
+);
 
 function getWeekMoney(count, exempted) {
   const fine = exempted ? 0 : (FINE_MAP[count] ?? 0);
@@ -92,6 +96,15 @@ function formatSignedAmount(amount, withUnit = true) {
   const sign = amount > 0 ? "+" : "-";
   const value = Math.abs(amount).toLocaleString();
   return `${sign}${value}${withUnit ? "원" : ""}`;
+}
+
+function getMonthKey(year, month) {
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+function getNextMonth(year, month) {
+  if (month === 11) return { year: year + 1, month: 0 };
+  return { year, month: month + 1 };
 }
 
 export default function StudyDashboard() {
@@ -111,6 +124,7 @@ export default function StudyDashboard() {
   useEffect(() => { storage.set("study-members", members); }, [members]);
   useEffect(() => { storage.set("study-weekdata", weekData); }, [weekData]);
   useEffect(() => { storage.set("stamp-exemptions", exemptions); }, [exemptions]);
+  useEffect(() => { storage.set("study-carryover", carryOverByMonth); }, [carryOverByMonth]);
 
   // 멤버별 전체 도장 수 (3회 이상 달성 주 수)
   const getStamps = (member) =>
@@ -141,7 +155,9 @@ export default function StudyDashboard() {
   // 정산월의 주차들
   const settleWeeks = getWeeksInMonth(settleMonth.year, settleMonth.month);
   const settleMonthLabel = `${settleMonth.year}년 ${settleMonth.month + 1}월`;
-
+  const settleMonthKey = getMonthKey(settleMonth.year, settleMonth.month);
+  const carryIn = carryOverByMonth[settleMonthKey] || 0;
+  
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2000); };
 
   const addMember = () => {
@@ -183,7 +199,7 @@ export default function StudyDashboard() {
     </button>
   );
 
-
+  
   return (
     <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "#e2e8f0", fontFamily: "'Noto Sans KR', sans-serif", paddingBottom: 80, maxWidth: "100vw", overflowX: "hidden", boxSizing: "border-box" }}>
       <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet" />
@@ -375,46 +391,49 @@ export default function StudyDashboard() {
           const firstSettleWeek = [...settleWeeks].sort()[0] ?? null;
           const recordedWeeks = Object.keys(weekData).sort();
 
-          const memberStats = members.map((member) => {
-            let fine = 0, bonus = 0, reserveBefore = 0;
-            const details = [];
+const memberStats = members.map((member) => {
+  let fine = 0;
+  let bonus = 0;
+  const details = [];
 
-            recordedWeeks.forEach((w) => {
-              const c = getCount(w, member);
-              if (c === null) return;
-              const exempted = isExempted(member, w);
-              const { fine: weekFine, bonus: weekBonus } = getWeekMoney(c, exempted);
+  recordedWeeks.forEach((w) => {
+    const c = getCount(w, member);
+    if (c === null) return;
 
-              if (firstSettleWeek && w < firstSettleWeek) {
-                reserveBefore += weekBonus;
-              }
+    const exempted = isExempted(member, w);
+    const { fine: weekFine, bonus: weekBonus } = getWeekMoney(c, exempted);
 
-              if (!settleWeekSet.has(w)) return;
+    if (!settleWeekSet.has(w)) return;
 
-              fine += weekFine;
-              bonus += weekBonus;
-              details.push({ week: w, count: c, fine: weekFine, bonus: weekBonus, exempted });
-            });
+    fine += weekFine;
+    bonus += weekBonus;
 
-            const change = bonus - fine;
-            const reserveTotal = reserveBefore + bonus;
+    details.push({
+      week: w,
+      count: c,
+      fine: weekFine,
+      bonus: weekBonus,
+      exempted,
+    });
+  });
 
-            return {
-              member,
-              fine,
-              bonus,
-              change,
-              reserveTotal,
-              total: fine + bonus,
-              stamps: getStamps(member),
-              available: getAvailableExemptions(member),
-              details,
-            };
-          });
-          const totalFine = memberStats.reduce((s, m) => s + m.fine, 0);
-          const totalBonus = memberStats.reduce((s, m) => s + m.bonus, 0);
-          const totalReserve = memberStats.reduce((s, m) => s + m.reserveTotal, 0);
-          const totalPool = totalFine + totalReserve;
+  const change = bonus - fine;
+
+  return {
+    member,
+    fine,
+    bonus,
+    change,
+    stamps: getStamps(member),
+    available: getAvailableExemptions(member),
+    details,
+  };
+});
+const totalFine = memberStats.reduce((s, m) => s + m.fine, 0);
+const totalBonus = memberStats.reduce((s, m) => s + m.bonus, 0);
+
+// 상품 예산 = 지난달 이월금 + 이번달 벌금
+const totalPool = carryIn + totalFine;
 
           // 이달 3회 이상 달성 횟수 기준 순위
           const monthlyPerfect = members.map((member) => ({
@@ -426,6 +445,43 @@ export default function StudyDashboard() {
           const top2Count = monthlyPerfect.find((m) => m.count < top1Count)?.count || 0;
           const top2 = monthlyPerfect.filter((m) => m.count === top2Count && m.count > 0);
 
+          const prizeMap = {};
+
+members.forEach((member) => {
+  prizeMap[member] = 0;
+});
+
+if (top1.length > 0) {
+  if (totalPool < 10000) {
+    const share = Math.floor(totalPool / top1.length);
+    top1.forEach(({ member }) => {
+      prizeMap[member] += share;
+    });
+  } else {
+    const firstPrize = Math.floor(totalPool * 0.6);
+    const secondPrize = totalPool - firstPrize;
+
+    const top1Share = Math.floor(firstPrize / top1.length);
+    top1.forEach(({ member }) => {
+      prizeMap[member] += top1Share;
+    });
+
+    if (top2.length > 0) {
+      const top2Share = Math.floor(secondPrize / top2.length);
+      top2.forEach(({ member }) => {
+        prizeMap[member] += top2Share;
+      });
+    } else {
+      const extraTop1Share = Math.floor(secondPrize / top1.length);
+      top1.forEach(({ member }) => {
+        prizeMap[member] += extraTop1Share;
+      });
+    }
+  }
+}
+
+const distributedTotal = Object.values(prizeMap).reduce((sum, n) => sum + n, 0);
+const carryOut = totalPool - distributedTotal;
           return (
             <div>
               {/* 월 네비게이션 */}
@@ -495,61 +551,171 @@ export default function StudyDashboard() {
                     <div style={{ fontSize: 18, fontWeight: 900, color: "#22c55e" }}>{totalBonus.toLocaleString()}원</div>
                   </div>
                   <div style={{ textAlign: "center", background: "#1e1b4b", border: "1px solid #3730a3", borderRadius: 12, padding: "12px 4px" }}>
-                    <div style={{ fontSize: 11, color: "#a5b4fc", marginBottom: 4 }}>예상 상품 예산</div>
+                    <div style={{ fontSize: 11, color: "#a5b4fc", marginBottom: 4 }}>상품 예산 (이월 포함)</div>
                     <div style={{ fontSize: 18, fontWeight: 900, color: "#818cf8" }}>{totalPool.toLocaleString()}원</div>
                   </div>
                 </div>
 
                 {/* 멤버별 정산 내역 */}
-                {memberStats.map(({ member, change, reserveTotal, details, available }) => {
-                  const showReserveTotal = reserveTotal > 0;
-                  const changeColor = change > 0 ? "#22c55e" : change < 0 ? "#ef4444" : "#64748b";
-                  const reserveText = `${reserveTotal.toLocaleString()}원 🎉`;
+{memberStats.map(({ member, change, bonus, fine, details, available }) => {
+  const prize = prizeMap[member] || 0;
+  const finalTotal = bonus - fine + prize;
 
-                  return (
-                    <div key={member} style={{ marginBottom: 10, background: "#0a0f1e", borderRadius: 12, padding: "12px", border: "1px solid #1e293b" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                        <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
-                        <div style={{ display: "flex", gap: 8, alignItems: "baseline", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: changeColor, opacity: 0.9 }}>
-                            {formatSignedAmount(change, !showReserveTotal)}
-                          </span>
-                          {showReserveTotal && (
-                            <span style={{ color: "#22c55e", fontSize: 16, fontWeight: 900 }}>
-                              {reserveText}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                        {details.map(({ week, count, fine: wf, bonus: wb, exempted }) => {
-                          const s = STATUS[count];
-                          const monday = weekKeyToFriday(week);
-                          const label = `${monday.getMonth() + 1}/${monday.getDate()}`;
-                          return (
-                            <div key={week} style={{ position: "relative", display: "flex", alignItems: "center", gap: 4, background: exempted ? "#1a2e05" : s.bg, border: `1px solid ${exempted ? "#3f6212" : s.border}`, borderRadius: 8, padding: "4px 8px", fontSize: 11 }}>
-                              <span style={{ color: "#64748b" }}>{label}</span>
-                              <span style={{ color: s.color, fontWeight: 600 }}>{s.emoji}{count}</span>
-                              {exempted ? (
-                                <span style={{ color: "#22c55e", fontWeight: 700, cursor: "pointer" }} onClick={() => toggleExemption(member, week)}>🎫</span>
-                              ) : wb > 0 ? (
-                                <span style={{ color: "#4ade80", fontWeight: 700 }}>{`+${wb}`}</span>
-                              ) : (
-                                <span style={{ color: "#f87171", fontWeight: 700 }}>{wf > 0 ? `${wf}` : ""}</span>
-                              )}
-                              {!exempted && count < 3 && available > 0 && (
-                                <span onClick={() => toggleExemption(member, week)}
-                                  style={{ cursor: "pointer", fontSize: 10, color: "#38bdf8", textDecoration: "underline" }}>면제</span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+  const showFinalTotal = finalTotal > 0;
+  const changeColor = change > 0 ? "#22c55e" : change < 0 ? "#ef4444" : "#64748b";
+  const totalText = `${finalTotal.toLocaleString()}원 🎉`;
 
+  return (
+    <div
+      key={member}
+      style={{
+        marginBottom: 10,
+        background: "#0a0f1e",
+        borderRadius: 12,
+        padding: "12px",
+        border: "1px solid #1e293b"
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 8
+        }}
+      >
+        <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "baseline",
+            justifyContent: "flex-end",
+            flexWrap: "wrap"
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: changeColor,
+              opacity: 0.9,
+              display: "flex",
+              alignItems: "baseline",
+              gap: 1
+            }}
+          >
+            {change > 0 ? (
+              <>
+                <span style={{ fontSize: 10, fontWeight: 700 }}>+</span>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>
+                  {Math.abs(change).toLocaleString()}
+                </span>
+              </>
+            ) : change < 0 ? (
+              <>
+                <span style={{ fontSize: 10, fontWeight: 700 }}>-</span>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>
+                  {Math.abs(change).toLocaleString()}원
+                </span>
+              </>
+            ) : (
+              <span style={{ fontSize: 11, fontWeight: 700 }}>0원</span>
+            )}
+          </span>
+
+{showFinalTotal && (
+  <span style={{ color: "#22c55e", fontSize: 16, fontWeight: 900 }}>
+    {totalText}
+  </span>
+)}
+          
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+  <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
+  {prize > 0 && (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        color: "#fbbf24",
+        background: "#422006",
+        border: "1px solid #713f12",
+        borderRadius: 999,
+        padding: "2px 6px"
+      }}
+    >
+      +{prize.toLocaleString()}
+    </span>
+  )}
+</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+        {details.map(({ week, count, fine: wf, bonus: wb, exempted }) => {
+          const s = STATUS[count];
+          const monday = weekKeyToFriday(week);
+          const label = `${monday.getMonth() + 1}/${monday.getDate()}`;
+
+          return (
+            <div
+              key={week}
+              style={{
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                background: exempted ? "#1a2e05" : s.bg,
+                border: `1px solid ${exempted ? "#3f6212" : s.border}`,
+                borderRadius: 8,
+                padding: "4px 8px",
+                fontSize: 11
+              }}
+            >
+              <span style={{ color: "#64748b" }}>{label}</span>
+              <span style={{ color: s.color, fontWeight: 600 }}>
+                {s.emoji}{count}
+              </span>
+
+              {exempted ? (
+                <span
+                  style={{ color: "#22c55e", fontWeight: 700, cursor: "pointer" }}
+                  onClick={() => toggleExemption(member, week)}
+                >
+                  🎫
+                </span>
+              ) : wb > 0 ? (
+                <span style={{ color: "#4ade80", fontWeight: 700 }}>
+                  +{wb}
+                </span>
+              ) : (
+                <span style={{ color: "#f87171", fontWeight: 700 }}>
+                  {wf > 0 ? `-${wf}` : ""}
+                </span>
+              )}
+
+              {!exempted && count < 3 && available > 0 && (
+                <span
+                  onClick={() => toggleExemption(member, week)}
+                  style={{
+                    cursor: "pointer",
+                    fontSize: 10,
+                    color: "#38bdf8",
+                    textDecoration: "underline"
+                  }}
+                >
+                  면제
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+})}
+</div>
               {/* 🎁 예상 상품증정 유저 */}
               <div style={{ background: "#111827", borderRadius: 14, padding: 16, border: "1px solid #1e293b" }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 14 }}>🎁 예상 상품증정</div>
@@ -585,6 +751,33 @@ export default function StudyDashboard() {
                   </div>
                 )}
               </div>
+              <button
+  onClick={() => {
+    const nextMonth = getNextMonth(settleMonth.year, settleMonth.month);
+    const nextMonthKey = getMonthKey(nextMonth.year, nextMonth.month);
+
+    setCarryOverByMonth((prev) => ({
+      ...prev,
+      [nextMonthKey]: carryOut,
+    }));
+
+    showToast(`${carryOut.toLocaleString()}원 이월 완료`);
+  }}
+  style={{
+    width: "100%",
+    marginTop: 12,
+    padding: "12px",
+    background: "#1e1b4b",
+    border: "1px solid #3730a3",
+    borderRadius: 12,
+    color: "#c7d2fe",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontFamily: "inherit"
+  }}
+>
+  남은 {carryOut.toLocaleString()}원 다음 달로 이월
+</button>
             </div>
           );
         })()}
