@@ -31,6 +31,21 @@ function getCurrentWeekKey() {
   return `${y}-${m}-${d}`;
 }
 
+  function isValidWeekKey(weekKey) {
+  if (typeof weekKey !== "string") return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) return false;
+
+  const [y, m, d] = weekKey.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+
+  return (
+    !Number.isNaN(date.getTime()) &&
+    date.getFullYear() === y &&
+    date.getMonth() === m - 1 &&
+    date.getDate() === d
+  );
+}
+
 function getWeekLabel(weekKey) {
   if (!isValidWeekKey(weekKey)) return "잘못된 주차";
 
@@ -208,20 +223,7 @@ const allWeeks = Array.from(
     </button>
   );
 
-  function isValidWeekKey(weekKey) {
-  if (typeof weekKey !== "string") return false;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) return false;
 
-  const [y, m, d] = weekKey.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-
-  return (
-    !Number.isNaN(date.getTime()) &&
-    date.getFullYear() === y &&
-    date.getMonth() === m - 1 &&
-    date.getDate() === d
-  );
-}
   return (
     <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "#e2e8f0", fontFamily: "'Noto Sans KR', sans-serif", paddingBottom: 80, maxWidth: "100vw", overflowX: "hidden", boxSizing: "border-box" }}>
       <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet" />
