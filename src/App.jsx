@@ -5,6 +5,10 @@ const STATUS = {
   1: { color: "#f97316", bg: "#431407", border: "#7c2d12", emoji: "🔥", text: "1회" },
   2: { color: "#84cc16", bg: "#1a2e05", border: "#3f6212", emoji: "✅", text: "2회" },
   3: { color: "#22c55e", bg: "#052e16", border: "#14532d", emoji: "🏆", text: "완료" },
+  4: { color: "#eab308", bg: "#422006", border: "#713f12", emoji: "⭐", text: "4회 +100" },
+  5: { color: "#06b6d4", bg: "#083344", border: "#155e75", emoji: "💎", text: "5회 +200" },
+  6: { color: "#a855f7", bg: "#3b0764", border: "#6b21a8", emoji: "👑", text: "6회 +300" },
+  7: { color: "#ec4899", bg: "#500724", border: "#9d174d", emoji: "🌟", text: "7회 +400" },
 };
 
 // 주차 기준: 금요일~목요일
@@ -74,8 +78,8 @@ function getWeeksInMonth(year, month) {
   return weeks;
 }
 
-const FINE_MAP = { 0: 1000, 1: 700, 2: 400, 3: 0 };
-const BONUS_3 = 700; // 3회 달성 시 적립금
+const FINE_MAP = { 0: 1000, 1: 700, 2: 400, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
+const BONUS_3 = 700; // 3회 이상 달성 시 기본 적립금 (4회부터 100원씩 추가)
 
 export default function StudyDashboard() {
   const [members, setMembers] = useState(() => storage.get("study-members") || []);
@@ -95,9 +99,9 @@ export default function StudyDashboard() {
   useEffect(() => { storage.set("study-weekdata", weekData); }, [weekData]);
   useEffect(() => { storage.set("stamp-exemptions", exemptions); }, [exemptions]);
 
-  // 멤버별 전체 도장 수 (3회 달성 주 수)
+  // 멤버별 전체 도장 수 (3회 이상 달성 주 수)
   const getStamps = (member) =>
-    Object.keys(weekData).filter((w) => weekData[w]?.[member] === 3).length;
+    Object.keys(weekData).filter((w) => (weekData[w]?.[member] ?? -1) >= 3).length;
 
   // 멤버별 사용한 면제권 수
   const getUsedExemptions = (member) => (exemptions[member]?.usedExemptions || []).length;
@@ -236,17 +240,21 @@ export default function StudyDashboard() {
                         <span style={{ fontWeight: 700, fontSize: 15 }}>{member}</span>
                         {cfg && <span style={{ color: cfg.color, fontSize: 13, fontWeight: 700 }}>{cfg.emoji} {cfg.text}</span>}
                       </div>
-                      <div style={{ display: "flex", gap: 7 }}>
-                        {[0, 1, 2, 3].map((n) => {
-                          const s = STATUS[n];
-                          const sel = count === n;
-                          return (
-                            <button key={n} onClick={() => setCount(viewWeek, member, n)}
-                              style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: `2px solid ${sel ? s.color : "#334155"}`, background: sel ? s.bg : "#0a0f1e", color: sel ? s.color : "#475569", fontWeight: sel ? 700 : 400, cursor: "pointer", fontSize: 15, transition: "all 0.15s", fontFamily: "inherit" }}>
-                              {n}
-                            </button>
-                          );
-                        })}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {[[0,1,2,3],[4,5,6,7]].map((row, ri) => (
+                          <div key={ri} style={{ display: "flex", gap: 7 }}>
+                            {row.map((n) => {
+                              const s = STATUS[n];
+                              const sel = count === n;
+                              return (
+                                <button key={n} onClick={() => setCount(viewWeek, member, n)}
+                                  style={{ flex: 1, padding: "9px 0", borderRadius: 10, border: `2px solid ${sel ? s.color : "#334155"}`, background: sel ? s.bg : "#0a0f1e", color: sel ? s.color : "#475569", fontWeight: sel ? 700 : 400, cursor: "pointer", fontSize: 14, transition: "all 0.15s", fontFamily: "inherit" }}>
+                                  {n}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   );
@@ -260,7 +268,7 @@ export default function StudyDashboard() {
           <div>
             <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>최근 8주 · 멤버별 인증 현황 (셀 클릭 → 해당 주 입력)</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-              {[3,2,1,0].map(n => {
+              {[7,6,5,4,3,2,1,0].map(n => {
                 const s = STATUS[n];
                 return (
                   <div key={n} style={{ display: "flex", alignItems: "center", gap: 5, background: s.bg, borderRadius: 8, padding: "5px 10px", border: `1px solid ${s.border}` }}>
@@ -330,14 +338,14 @@ export default function StudyDashboard() {
               <div style={{ marginTop: 20, background: "#111827", borderRadius: 14, padding: 16, border: "1px solid #1e293b" }}>
                 <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>이번 주 요약</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
-                  {[3,2,1,0].map(n => {
+                  {[7,6,5,4,3,2,1,0].map(n => {
                     const s = STATUS[n];
                     const cnt = members.filter(m => getCount(getCurrentWeekKey(), m) === n).length;
                     return (
-                      <div key={n} style={{ textAlign: "center", background: s.bg, border: `1px solid ${s.border}`, borderRadius: 12, padding: "12px 4px" }}>
-                        <div style={{ fontSize: 22 }}>{s.emoji}</div>
-                        <div style={{ fontSize: 24, fontWeight: 900, color: s.color }}>{cnt}</div>
-                        <div style={{ fontSize: 11, color: s.color, opacity: 0.8 }}>{n}개</div>
+                      <div key={n} style={{ textAlign: "center", background: s.bg, border: `1px solid ${s.border}`, borderRadius: 12, padding: "10px 4px" }}>
+                        <div style={{ fontSize: 18 }}>{s.emoji}</div>
+                        <div style={{ fontSize: 20, fontWeight: 900, color: s.color }}>{cnt}</div>
+                        <div style={{ fontSize: 10, color: s.color, opacity: 0.8 }}>{n}개</div>
                       </div>
                     );
                   })}
@@ -355,8 +363,8 @@ export default function StudyDashboard() {
               const c = getCount(w, member);
               if (c === null) return;
               const exempted = isExempted(member, w);
-              const weekFine = exempted ? 0 : FINE_MAP[c];
-              const weekBonus = c === 3 ? BONUS_3 : 0;
+              const weekFine = exempted ? 0 : (FINE_MAP[c] ?? 0);
+              const weekBonus = c >= 3 ? BONUS_3 + (c - 3) * 100 : 0;
               fine += weekFine;
               bonus += weekBonus;
               details.push({ week: w, count: c, fine: weekFine, bonus: weekBonus, exempted });
@@ -367,10 +375,10 @@ export default function StudyDashboard() {
           const totalBonus = memberStats.reduce((s, m) => s + m.bonus, 0);
           const totalPool = totalFine + totalBonus;
 
-          // 이달 3회 달성 횟수 기준 순위
+          // 이달 3회 이상 달성 횟수 기준 순위
           const monthlyPerfect = members.map((member) => ({
             member,
-            count: settleWeeks.filter((w) => getCount(w, member) === 3).length,
+            count: settleWeeks.filter((w) => (getCount(w, member) ?? -1) >= 3).length,
           })).sort((a, b) => b.count - a.count);
           const top1Count = monthlyPerfect[0]?.count || 0;
           const top1 = monthlyPerfect.filter((m) => m.count === top1Count && m.count > 0);
@@ -442,7 +450,7 @@ export default function StudyDashboard() {
                     <div style={{ fontSize: 18, fontWeight: 900, color: "#ef4444" }}>{totalFine.toLocaleString()}원</div>
                   </div>
                   <div style={{ textAlign: "center", background: "#052e16", border: "1px solid #14532d", borderRadius: 12, padding: "12px 4px" }}>
-                    <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 4 }}>3회 적립금</div>
+                    <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 4 }}>완료 적립금</div>
                     <div style={{ fontSize: 18, fontWeight: 900, color: "#22c55e" }}>{totalBonus.toLocaleString()}원</div>
                   </div>
                   <div style={{ textAlign: "center", background: "#1e1b4b", border: "1px solid #3730a3", borderRadius: 12, padding: "12px 4px" }}>
