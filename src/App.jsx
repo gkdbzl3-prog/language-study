@@ -8,34 +8,24 @@ const STATUS = {
 };
 
 // 주차 기준: 금요일~목요일
-// 날짜를 4일 앞당기면 금요일→월요일로 매핑되어 ISO 주차 계산 재활용 가능
+// weekKey = "YYYY-MM-DD" (해당 주 금요일 날짜 문자열)
+
 function weekKeyToFriday(weekKey) {
-  const [year, wkStr] = weekKey.split("-W");
-  const wk = parseInt(wkStr);
-  const jan1 = new Date(parseInt(year), 0, 1);
-  const dayOfWeek = jan1.getDay() || 7;
-  const firstMonday = new Date(jan1);
-  firstMonday.setDate(jan1.getDate() + (8 - dayOfWeek) % 7);
-  const monday = new Date(firstMonday);
-  monday.setDate(firstMonday.getDate() + (wk - 1) * 7);
-  // ISO 월요일 + 4일 = 금요일 (실제 주 시작일)
-  monday.setDate(monday.getDate() + 4);
-  return monday;
+  const [y, m, d] = weekKey.split("-").map(Number);
+  return new Date(y, m - 1, d);
 }
 
-function dateToWeekKey(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  // 4일 앞당겨서 금요일→월요일 매핑
-  const shifted = new Date(d);
-  shifted.setDate(shifted.getDate() - 4);
-  shifted.setDate(shifted.getDate() + 3 - ((shifted.getDay() + 6) % 7));
-  const week1 = new Date(shifted.getFullYear(), 0, 4);
-  const wk = 1 + Math.round(((shifted - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
-  return `${shifted.getFullYear()}-W${String(wk).padStart(2, "0")}`;
+function getCurrentWeekKey() {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  // 가장 최근 금요일 찾기: Fri=0, Sat=1, Sun=2, Mon=3, Tue=4, Wed=5, Thu=6
+  const daysBack = (now.getDay() + 2) % 7;
+  now.setDate(now.getDate() - daysBack);
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
-
-function getCurrentWeekKey() { return dateToWeekKey(new Date()); }
 
 function getWeekLabel(weekKey) {
   const friday = weekKeyToFriday(weekKey);
@@ -48,7 +38,10 @@ function getWeekLabel(weekKey) {
 function shiftWeek(weekKey, delta) {
   const friday = weekKeyToFriday(weekKey);
   friday.setDate(friday.getDate() + delta * 7);
-  return dateToWeekKey(friday);
+  const y = friday.getFullYear();
+  const m = String(friday.getMonth() + 1).padStart(2, "0");
+  const d = String(friday.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 // localStorage 헬퍼
@@ -57,7 +50,18 @@ const storage = {
   set: (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} },
 };
 
-// 해당 월에 속하는 주차 키 목록 반환 (월요일 기준)
+// 해당 월에 속하는 주차 키 목록 반환 (금요일 기준)
+function dateToWeekKey(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const daysBack = (d.getDay() + 2) % 7;
+  d.setDate(d.getDate() - daysBack);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
 function getWeeksInMonth(year, month) {
   const weeks = [];
   const d = new Date(year, month, 1);
@@ -156,8 +160,8 @@ export default function StudyDashboard() {
   const filledCount = members.filter((m) => getCount(viewWeek, m) !== null).length;
   const isCurrentWeek = viewWeek === getCurrentWeekKey();
 
-  const NavBtn = ({ children, onClick }) => (
-    <button onClick={onClick} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, width: 36, height: 36, color: "#94a3b8", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+  const NavBtn = ({ children, onClick, disabled }) => (
+    <button onClick={disabled ? undefined : onClick} style={{ background: disabled ? "#0f172a" : "#1e293b", border: `1px solid ${disabled ? "#1e293b" : "#475569"}`, borderRadius: 8, width: 36, height: 36, color: disabled ? "#334155" : "#e2e8f0", cursor: disabled ? "default" : "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.15s" }}>
       {children}
     </button>
   );
@@ -194,7 +198,7 @@ export default function StudyDashboard() {
                 <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9" }}>{getWeekLabel(viewWeek)}</div>
                 {!isCurrentWeek && <div style={{ fontSize: 11, color: "#f97316", marginTop: 2 }}>● 소급 입력 중</div>}
               </div>
-              <NavBtn onClick={() => setViewWeek((w) => shiftWeek(w, 1))}>▶</NavBtn>
+              <NavBtn onClick={() => setViewWeek((w) => shiftWeek(w, 1))} disabled={isCurrentWeek}>▶</NavBtn>
             </div>
 
             {!isCurrentWeek && (
