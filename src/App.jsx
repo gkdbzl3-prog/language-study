@@ -532,7 +532,7 @@ export default function StudyDashboard() {
                               {exempted ? (
                                 <span style={{ color: "#22c55e", fontWeight: 700, cursor: "pointer" }} onClick={() => toggleExemption(member, week)}>🎫</span>
                               ) : (
-                                <span style={{ color: "#f87171", fontWeight: 600 }}>{wf > 0 ? `${wf}` : ""}</span>
+                                <span style={{ color: "#f87171", fontWeight: 700, fontSize:16 }}>{wf > 0 ? `${wf}` : ""}</span>
                               )}
                               {!exempted && count < 3 && available > 0 && (
                                 <span onClick={() => toggleExemption(member, week)}
