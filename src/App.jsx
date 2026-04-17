@@ -370,7 +370,7 @@ export default function StudyDashboard() {
         )}
 
         {tab === "settle" && (() => {
-          // 월별 벌금 / 이번 달 변동액 / 누적 적립금 계산
+          // 월별 벌금 / 이번 달 변동액 / 적립금 누계 계산
           const settleWeekSet = new Set(settleWeeks);
           const firstSettleWeek = [...settleWeeks].sort()[0] ?? null;
           const recordedWeeks = Object.keys(weekData).sort();
@@ -413,7 +413,8 @@ export default function StudyDashboard() {
           });
           const totalFine = memberStats.reduce((s, m) => s + m.fine, 0);
           const totalBonus = memberStats.reduce((s, m) => s + m.bonus, 0);
-          const totalPool = totalFine + totalBonus;
+          const totalReserve = memberStats.reduce((s, m) => s + m.reserveTotal, 0);
+          const totalPool = totalFine + totalReserve;
 
           // 이달 3회 이상 달성 횟수 기준 순위
           const monthlyPerfect = members.map((member) => ({
@@ -490,38 +491,38 @@ export default function StudyDashboard() {
                     <div style={{ fontSize: 18, fontWeight: 900, color: "#ef4444" }}>{totalFine.toLocaleString()}원</div>
                   </div>
                   <div style={{ textAlign: "center", background: "#052e16", border: "1px solid #14532d", borderRadius: 12, padding: "12px 4px" }}>
-                    <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 4 }}>완료 적립금</div>
+                    <div style={{ fontSize: 11, color: "#4ade80", marginBottom: 4 }}>이번 달 적립금</div>
                     <div style={{ fontSize: 18, fontWeight: 900, color: "#22c55e" }}>{totalBonus.toLocaleString()}원</div>
                   </div>
                   <div style={{ textAlign: "center", background: "#1e1b4b", border: "1px solid #3730a3", borderRadius: 12, padding: "12px 4px" }}>
-                    <div style={{ fontSize: 11, color: "#a5b4fc", marginBottom: 4 }}>상품 예산</div>
+                    <div style={{ fontSize: 11, color: "#a5b4fc", marginBottom: 4 }}>예상 상품 예산</div>
                     <div style={{ fontSize: 18, fontWeight: 900, color: "#818cf8" }}>{totalPool.toLocaleString()}원</div>
                   </div>
                 </div>
 
                 {/* 멤버별 정산 내역 */}
-                {memberStats.map(({ member, bonus, change, reserveTotal, details, available }) => {
-                  const showReserveTotal = bonus > 0 && reserveTotal > 0;
+                {memberStats.map(({ member, change, reserveTotal, details, available }) => {
+                  const showReserveTotal = reserveTotal > 0;
                   const changeColor = change > 0 ? "#22c55e" : change < 0 ? "#ef4444" : "#64748b";
-                  const reserveColor = reserveTotal > 0 ? "#22c55e" : "#64748b";
+                  const reserveText = `${reserveTotal.toLocaleString()}원 🎉`;
 
                   return (
                     <div key={member} style={{ marginBottom: 10, background: "#0a0f1e", borderRadius: 12, padding: "12px", border: "1px solid #1e293b" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                         <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
                         <div style={{ display: "flex", gap: 8, alignItems: "baseline", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: changeColor, opacity: showReserveTotal ? 0.9 : 1 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: changeColor, opacity: 0.9 }}>
                             {formatSignedAmount(change, !showReserveTotal)}
                           </span>
                           {showReserveTotal && (
-                            <span style={{ color: reserveColor, fontSize: 16, fontWeight: 900 }}>
-                              {reserveTotal.toLocaleString()}원 🎉
+                            <span style={{ color: "#22c55e", fontSize: 16, fontWeight: 900 }}>
+                              {reserveText}
                             </span>
                           )}
                         </div>
                       </div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                        {details.map(({ week, count, fine: wf, exempted }) => {
+                        {details.map(({ week, count, fine: wf, bonus: wb, exempted }) => {
                           const s = STATUS[count];
                           const monday = weekKeyToFriday(week);
                           const label = `${monday.getMonth() + 1}/${monday.getDate()}`;
@@ -531,8 +532,10 @@ export default function StudyDashboard() {
                               <span style={{ color: s.color, fontWeight: 600 }}>{s.emoji}{count}</span>
                               {exempted ? (
                                 <span style={{ color: "#22c55e", fontWeight: 700, cursor: "pointer" }} onClick={() => toggleExemption(member, week)}>🎫</span>
+                              ) : wb > 0 ? (
+                                <span style={{ color: "#4ade80", fontWeight: 700 }}>{`+${wb}`}</span>
                               ) : (
-                                <span style={{ color: "#f87171", fontWeight: 700, fontSize:16 }}>{wf > 0 ? `${wf}` : ""}</span>
+                                <span style={{ color: "#f87171", fontWeight: 700 }}>{wf > 0 ? `${wf}` : ""}</span>
                               )}
                               {!exempted && count < 3 && available > 0 && (
                                 <span onClick={() => toggleExemption(member, week)}
