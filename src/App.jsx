@@ -7,7 +7,9 @@ const STATUS = {
   3: { color: "#22c55e", bg: "#052e16", border: "#14532d", emoji: "🏆", text: "완료" },
 };
 
-function weekKeyToMonday(weekKey) {
+// 주차 기준: 금요일~목요일
+// 날짜를 4일 앞당기면 금요일→월요일로 매핑되어 ISO 주차 계산 재활용 가능
+function weekKeyToFriday(weekKey) {
   const [year, wkStr] = weekKey.split("-W");
   const wk = parseInt(wkStr);
   const jan1 = new Date(parseInt(year), 0, 1);
@@ -16,32 +18,37 @@ function weekKeyToMonday(weekKey) {
   firstMonday.setDate(jan1.getDate() + (8 - dayOfWeek) % 7);
   const monday = new Date(firstMonday);
   monday.setDate(firstMonday.getDate() + (wk - 1) * 7);
+  // ISO 월요일 + 4일 = 금요일 (실제 주 시작일)
+  monday.setDate(monday.getDate() + 4);
   return monday;
 }
 
 function dateToWeekKey(date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
-  const week1 = new Date(d.getFullYear(), 0, 4);
-  const wk = 1 + Math.round(((d - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
-  return `${d.getFullYear()}-W${String(wk).padStart(2, "0")}`;
+  // 4일 앞당겨서 금요일→월요일 매핑
+  const shifted = new Date(d);
+  shifted.setDate(shifted.getDate() - 4);
+  shifted.setDate(shifted.getDate() + 3 - ((shifted.getDay() + 6) % 7));
+  const week1 = new Date(shifted.getFullYear(), 0, 4);
+  const wk = 1 + Math.round(((shifted - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+  return `${shifted.getFullYear()}-W${String(wk).padStart(2, "0")}`;
 }
 
 function getCurrentWeekKey() { return dateToWeekKey(new Date()); }
 
 function getWeekLabel(weekKey) {
-  const monday = weekKeyToMonday(weekKey);
-  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+  const friday = weekKeyToFriday(weekKey);
+  const thursday = new Date(friday); thursday.setDate(friday.getDate() + 6);
   const fmt = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
   const isCur = weekKey === getCurrentWeekKey();
-  return `${monday.getFullYear()}년 ${fmt(monday)}~${fmt(sunday)}${isCur ? " (이번주)" : ""}`;
+  return `${friday.getFullYear()}년 ${fmt(friday)}~${fmt(thursday)}${isCur ? " (이번주)" : ""}`;
 }
 
 function shiftWeek(weekKey, delta) {
-  const monday = weekKeyToMonday(weekKey);
-  monday.setDate(monday.getDate() + delta * 7);
-  return dateToWeekKey(monday);
+  const friday = weekKeyToFriday(weekKey);
+  friday.setDate(friday.getDate() + delta * 7);
+  return dateToWeekKey(friday);
 }
 
 // localStorage 헬퍼
@@ -276,11 +283,11 @@ export default function StudyDashboard() {
                     <tr>
                       <th style={{ textAlign: "left", padding: "6px 10px", fontSize: 11, color: "#475569", fontWeight: 500, minWidth: 65 }}></th>
                       {heatmapWeeks.map((w) => {
-                        const monday = weekKeyToMonday(w);
+                        const fri = weekKeyToFriday(w);
                         const isCur = w === getCurrentWeekKey();
                         return (
                           <th key={w} style={{ padding: "4px 3px", fontSize: 10, color: isCur ? "#38bdf8" : "#475569", fontWeight: isCur ? 700 : 400, textAlign: "center", minWidth: 38 }}>
-                            <div>{`${monday.getMonth()+1}/${monday.getDate()}`}</div>
+                            <div>{`${fri.getMonth()+1}/${fri.getDate()}`}</div>
                             {isCur && <div style={{ fontSize: 8, color: "#38bdf8", marginTop: 1 }}>●</div>}
                           </th>
                         );
@@ -453,7 +460,7 @@ export default function StudyDashboard() {
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                       {details.map(({ week, count, fine: wf, exempted }) => {
                         const s = STATUS[count];
-                        const monday = weekKeyToMonday(week);
+                        const monday = weekKeyToFriday(week);
                         const label = `${monday.getMonth()+1}/${monday.getDate()}`;
                         return (
                           <div key={week} style={{ position: "relative", display: "flex", alignItems: "center", gap: 4, background: exempted ? "#1a2e05" : s.bg, border: `1px solid ${exempted ? "#3f6212" : s.border}`, borderRadius: 8, padding: "4px 8px", fontSize: 11 }}>
