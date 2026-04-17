@@ -80,10 +80,7 @@ function getWeeksInMonth(year, month) {
 
 const FINE_MAP = { 0: 1000, 1: 700, 2: 400, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
 const BONUS_3 = 800; // 3회 이상 달성 시 기본 적립금 (4회부터 100원씩 추가)
-const [carryOverPool, setCarryOverPool] = useState(() => storage.get("study-carryover") || {});
-const [carryOverByMonth, setCarryOverByMonth] = useState(
-  () => storage.get("study-carryover") || {}
-);
+
 
 function getWeekMoney(count, exempted) {
   const fine = exempted ? 0 : (FINE_MAP[count] ?? 0);
@@ -120,7 +117,10 @@ export default function StudyDashboard() {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
   });
-
+const [carryOverPool, setCarryOverPool] = useState(() => storage.get("study-carryover") || {});
+const [carryOverByMonth, setCarryOverByMonth] = useState(
+  () => storage.get("study-carryover") || {}
+);
   useEffect(() => { storage.set("study-members", members); }, [members]);
   useEffect(() => { storage.set("study-weekdata", weekData); }, [weekData]);
   useEffect(() => { storage.set("stamp-exemptions", exemptions); }, [exemptions]);
