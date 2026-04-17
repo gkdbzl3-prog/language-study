@@ -631,24 +631,7 @@ const carryOut = totalPool - distributedTotal;
   </span>
 )}
           
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-  <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
-  {prize > 0 && (
-    <span
-      style={{
-        fontSize: 10,
-        fontWeight: 700,
-        color: "#fbbf24",
-        background: "#422006",
-        border: "1px solid #713f12",
-        borderRadius: 999,
-        padding: "2px 6px"
-      }}
-    >
-      +{prize.toLocaleString()}
-    </span>
-  )}
-</div>
+         
         </div>
       </div>
 
