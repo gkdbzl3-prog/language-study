@@ -81,6 +81,19 @@ function getWeeksInMonth(year, month) {
 const FINE_MAP = { 0: 1000, 1: 700, 2: 400, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
 const BONUS_3 = 800; // 3회 이상 달성 시 기본 적립금 (4회부터 100원씩 추가)
 
+function getWeekMoney(count, exempted) {
+  const fine = exempted ? 0 : (FINE_MAP[count] ?? 0);
+  const bonus = count >= 3 ? BONUS_3 + (count - 3) * 100 : 0;
+  return { fine, bonus };
+}
+
+function formatSignedAmount(amount, withUnit = true) {
+  if (amount === 0) return withUnit ? "0원" : "0";
+  const sign = amount > 0 ? "+" : "-";
+  const value = Math.abs(amount).toLocaleString();
+  return `${sign}${value}${withUnit ? "원" : ""}`;
+}
+
 export default function StudyDashboard() {
   const [members, setMembers] = useState(() => storage.get("study-members") || []);
   const [weekData, setWeekData] = useState(() => storage.get("study-weekdata") || {});
@@ -357,20 +370,46 @@ export default function StudyDashboard() {
         )}
 
         {tab === "settle" && (() => {
-          // 월별 벌금 & 적립금 계산
+          // 월별 벌금 / 이번 달 변동액 / 누적 적립금 계산
+          const settleWeekSet = new Set(settleWeeks);
+          const firstSettleWeek = [...settleWeeks].sort()[0] ?? null;
+          const recordedWeeks = Object.keys(weekData).sort();
+
           const memberStats = members.map((member) => {
-            let fine = 0, bonus = 0, details = [];
-            settleWeeks.forEach((w) => {
+            let fine = 0, bonus = 0, reserveBefore = 0;
+            const details = [];
+
+            recordedWeeks.forEach((w) => {
               const c = getCount(w, member);
               if (c === null) return;
               const exempted = isExempted(member, w);
-              const weekFine = exempted ? 0 : (FINE_MAP[c] ?? 0);
-              const weekBonus = c >= 3 ? BONUS_3 + (c - 3) * 100 : 0;
+              const { fine: weekFine, bonus: weekBonus } = getWeekMoney(c, exempted);
+
+              if (firstSettleWeek && w < firstSettleWeek) {
+                reserveBefore += weekBonus;
+              }
+
+              if (!settleWeekSet.has(w)) return;
+
               fine += weekFine;
               bonus += weekBonus;
               details.push({ week: w, count: c, fine: weekFine, bonus: weekBonus, exempted });
             });
-            return { member, fine, bonus, total: fine + bonus, stamps: getStamps(member), available: getAvailableExemptions(member), details };
+
+            const change = bonus - fine;
+            const reserveTotal = reserveBefore + bonus;
+
+            return {
+              member,
+              fine,
+              bonus,
+              change,
+              reserveTotal,
+              total: fine + bonus,
+              stamps: getStamps(member),
+              available: getAvailableExemptions(member),
+              details,
+            };
           });
           const totalFine = memberStats.reduce((s, m) => s + m.fine, 0);
           const totalBonus = memberStats.reduce((s, m) => s + m.bonus, 0);
@@ -460,25 +499,25 @@ export default function StudyDashboard() {
                   </div>
                 </div>
 
-                {/* 멤버별 벌금 내역 */}
-                {memberStats.map(({ member, fine, bonus, details, available }) => {
-                  const net = bonus - fine;
+                {/* 멤버별 정산 내역 */}
+                {memberStats.map(({ member, bonus, change, reserveTotal, details, available }) => {
+                  const showReserveTotal = bonus > 0 && reserveTotal > 0;
+                  const changeColor = change > 0 ? "#22c55e" : change < 0 ? "#ef4444" : "#64748b";
+                  const reserveColor = reserveTotal > 0 ? "#22c55e" : "#64748b";
+
                   return (
                     <div key={member} style={{ marginBottom: 10, background: "#0a0f1e", borderRadius: 12, padding: "12px", border: "1px solid #1e293b" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                         <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-{bonus > 0 && (
-  <span style={{ color: "#22c55e", fontWeight: 700 }}>
-    +{bonus.toLocaleString()} ({net >= 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}원)
-  </span>
-)}
-                          <span style={{
-                            fontWeight: 900,
-                            color: fine > 0 ? "#ef4444" : "#64748b"
-                          }}>
-                            {fine > 0 ? `-${fine.toLocaleString()}원` : "0원 🎉"}
+                        <div style={{ display: "flex", gap: 8, alignItems: "baseline", justifyContent: "flex-end", flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: changeColor, opacity: showReserveTotal ? 0.9 : 1 }}>
+                            {formatSignedAmount(change, !showReserveTotal)}
                           </span>
+                          {showReserveTotal && (
+                            <span style={{ color: reserveColor, fontSize: 16, fontWeight: 900 }}>
+                              {reserveTotal.toLocaleString()}원 🎉
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
