@@ -79,7 +79,7 @@ function getWeeksInMonth(year, month) {
 }
 
 const FINE_MAP = { 0: 1000, 1: 700, 2: 400, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
-const BONUS_3 = 700; // 3회 이상 달성 시 기본 적립금 (4회부터 100원씩 추가)
+const BONUS_3 = 800; // 3회 이상 달성 시 기본 적립금 (4회부터 100원씩 추가)
 
 export default function StudyDashboard() {
   const [members, setMembers] = useState(() => storage.get("study-members") || []);
@@ -169,6 +169,7 @@ export default function StudyDashboard() {
       {children}
     </button>
   );
+  const net = bonus - fine;
 
   return (
     <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "#e2e8f0", fontFamily: "'Noto Sans KR', sans-serif", paddingBottom: 80, maxWidth: "100vw", overflowX: "hidden", boxSizing: "border-box" }}>
@@ -464,10 +465,19 @@ export default function StudyDashboard() {
                   <div key={member} style={{ marginBottom: 10, background: "#0a0f1e", borderRadius: 12, padding: "12px", border: "1px solid #1e293b" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        {bonus > 0 && <span style={{ fontSize: 12, color: "#22c55e", fontWeight: 700 }}>+{bonus.toLocaleString()}</span>}
-                        <span style={{ fontSize: 14, fontWeight: 900, color: fine > 0 ? "#ef4444" : "#22c55e" }}>{fine > 0 ? `${fine.toLocaleString()}원` : "0원 🎉"}</span>
-                      </div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                       {bonus > 0 && (
+  <span style={{ color: "#22c55e", fontWeight: 700 }}>
+    +{bonus.toLocaleString()} ({net.toLocaleString()}원)
+  </span>
+)}
+ <span style={{
+  fontWeight: 900,
+  color: fine > 0 ? "#ef4444" : "#64748b"
+}}>
+  {fine > 0 ? `-${fine.toLocaleString()}원` : "0원 🎉"}
+</span>
+</div>
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                       {details.map(({ week, count, fine: wf, exempted }) => {
