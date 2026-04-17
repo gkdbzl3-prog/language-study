@@ -461,49 +461,51 @@ export default function StudyDashboard() {
                 </div>
 
                 {/* 멤버별 벌금 내역 */}
-                {memberStats.map(({ member, fine, bonus, details, available }) => (
-                    const net = bonus - fine;
-                  <div key={member} style={{ marginBottom: 10, background: "#0a0f1e", borderRadius: 12, padding: "12px", border: "1px solid #1e293b" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
-                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                       {bonus > 0 && (
+                {memberStats.map(({ member, fine, bonus, details, available }) => {
+                  const net = bonus - fine;
+                  return (
+                    <div key={member} style={{ marginBottom: 10, background: "#0a0f1e", borderRadius: 12, padding: "12px", border: "1px solid #1e293b" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+{bonus > 0 && (
   <span style={{ color: "#22c55e", fontWeight: 700 }}>
-    +{bonus.toLocaleString()} ({net.toLocaleString()}원)
+    +{bonus.toLocaleString()} ({net >= 0 ? `+${net.toLocaleString()}` : net.toLocaleString()}원)
   </span>
 )}
- <span style={{
-  fontWeight: 900,
-  color: fine > 0 ? "#ef4444" : "#64748b"
-}}>
-  {fine > 0 ? `-${fine.toLocaleString()}원` : "0원 🎉"}
-</span>
-</div>
+                          <span style={{
+                            fontWeight: 900,
+                            color: fine > 0 ? "#ef4444" : "#64748b"
+                          }}>
+                            {fine > 0 ? `-${fine.toLocaleString()}원` : "0원 🎉"}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {details.map(({ week, count, fine: wf, exempted }) => {
+                          const s = STATUS[count];
+                          const monday = weekKeyToFriday(week);
+                          const label = `${monday.getMonth() + 1}/${monday.getDate()}`;
+                          return (
+                            <div key={week} style={{ position: "relative", display: "flex", alignItems: "center", gap: 4, background: exempted ? "#1a2e05" : s.bg, border: `1px solid ${exempted ? "#3f6212" : s.border}`, borderRadius: 8, padding: "4px 8px", fontSize: 11 }}>
+                              <span style={{ color: "#64748b" }}>{label}</span>
+                              <span style={{ color: s.color, fontWeight: 600 }}>{s.emoji}{count}</span>
+                              {exempted ? (
+                                <span style={{ color: "#22c55e", fontWeight: 700, cursor: "pointer" }} onClick={() => toggleExemption(member, week)}>🎫</span>
+                              ) : (
+                                <span style={{ color: "#f87171", fontWeight: 600 }}>{wf > 0 ? `${wf}` : ""}</span>
+                              )}
+                              {!exempted && count < 3 && available > 0 && (
+                                <span onClick={() => toggleExemption(member, week)}
+                                  style={{ cursor: "pointer", fontSize: 10, color: "#38bdf8", textDecoration: "underline" }}>면제</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {details.map(({ week, count, fine: wf, exempted }) => {
-                        const s = STATUS[count];
-                        const monday = weekKeyToFriday(week);
-                        const label = `${monday.getMonth()+1}/${monday.getDate()}`;
-                        return (
-                          <div key={week} style={{ position: "relative", display: "flex", alignItems: "center", gap: 4, background: exempted ? "#1a2e05" : s.bg, border: `1px solid ${exempted ? "#3f6212" : s.border}`, borderRadius: 8, padding: "4px 8px", fontSize: 11 }}>
-                            <span style={{ color: "#64748b" }}>{label}</span>
-                            <span style={{ color: s.color, fontWeight: 600 }}>{s.emoji}{count}</span>
-                            {exempted ? (
-                              <span style={{ color: "#22c55e", fontWeight: 700, cursor: "pointer" }} onClick={() => toggleExemption(member, week)}>🎫</span>
-                            ) : (
-                              <span style={{ color: "#f87171", fontWeight: 600 }}>{wf > 0 ? `${wf}` : ""}</span>
-                            )}
-                            {!exempted && count < 3 && available > 0 && (
-                              <span onClick={() => toggleExemption(member, week)}
-                                style={{ cursor: "pointer", fontSize: 10, color: "#38bdf8", textDecoration: "underline" }}>면제</span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* 🎁 예상 상품증정 유저 */}
