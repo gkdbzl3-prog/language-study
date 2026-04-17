@@ -169,7 +169,7 @@ export default function StudyDashboard() {
       {children}
     </button>
   );
-  const net = bonus - fine;
+
 
   return (
     <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "#e2e8f0", fontFamily: "'Noto Sans KR', sans-serif", paddingBottom: 80, maxWidth: "100vw", overflowX: "hidden", boxSizing: "border-box" }}>
@@ -462,6 +462,7 @@ export default function StudyDashboard() {
 
                 {/* 멤버별 벌금 내역 */}
                 {memberStats.map(({ member, fine, bonus, details, available }) => (
+                    const net = bonus - fine;
                   <div key={member} style={{ marginBottom: 10, background: "#0a0f1e", borderRadius: 12, padding: "12px", border: "1px solid #1e293b" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                       <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
