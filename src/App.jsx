@@ -32,10 +32,15 @@ function getCurrentWeekKey() {
 }
 
 function getWeekLabel(weekKey) {
+  if (!isValidWeekKey(weekKey)) return "잘못된 주차";
+
   const friday = weekKeyToFriday(weekKey);
-  const thursday = new Date(friday); thursday.setDate(friday.getDate() + 6);
+  const thursday = new Date(friday);
+  thursday.setDate(friday.getDate() + 6);
+
   const fmt = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
   const isCur = weekKey === getCurrentWeekKey();
+
   return `${friday.getFullYear()}년 ${fmt(friday)}~${fmt(thursday)}${isCur ? " (이번주)" : ""}`;
 }
 
@@ -179,10 +184,14 @@ const [carryOverByMonth, setCarryOverByMonth] = useState(
 
   const getCount = (week, member) => weekData[week]?.[member] ?? null;
 
-  const allWeeks = Array.from(new Set([
+const allWeeks = Array.from(
+  new Set([
     getCurrentWeekKey(),
-    ...Object.keys(weekData).filter((w) => Object.keys(weekData[w] || {}).length > 0),
-  ])).sort().reverse();
+    ...Object.keys(weekData).filter(
+      (w) => isValidWeekKey(w) && Object.keys(weekData[w] || {}).length > 0
+    ),
+  ])
+).sort().reverse();
 
   const heatmapWeeks = (() => {
     const weeks = []; let w = getCurrentWeekKey();
@@ -199,7 +208,20 @@ const [carryOverByMonth, setCarryOverByMonth] = useState(
     </button>
   );
 
-  
+  function isValidWeekKey(weekKey) {
+  if (typeof weekKey !== "string") return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekKey)) return false;
+
+  const [y, m, d] = weekKey.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+
+  return (
+    !Number.isNaN(date.getTime()) &&
+    date.getFullYear() === y &&
+    date.getMonth() === m - 1 &&
+    date.getDate() === d
+  );
+}
   return (
     <div style={{ minHeight: "100vh", background: "#0a0f1e", color: "#e2e8f0", fontFamily: "'Noto Sans KR', sans-serif", paddingBottom: 80, maxWidth: "100vw", overflowX: "hidden", boxSizing: "border-box" }}>
       <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet" />
@@ -557,18 +579,21 @@ const carryOut = totalPool - distributedTotal;
                 </div>
 
                 {/* 멤버별 정산 내역 */}
-{memberStats.map(({ member, change, bonus, fine, details, available }) => {
-const prize = prizeMap[member] || 0;
-const finalTotal = bonus - fine + prize;
+{memberStats.map(({ member, bonus, fine, details, available }) => {
+  const prize = prizeMap[member] || 0;
 
-const showFinalTotal = finalTotal !== 0;
-const changeColor = change > 0 ? "#22c55e" : change < 0 ? "#ef4444" : "#64748b";
+  // 적립금 + 상품분배액 - 벌금
+  const change = bonus + prize - fine;
+  const finalTotal = change;
 
-const finalTotalColor = finalTotal > 0 ? "#22c55e" : "#ef4444";
-const totalText =
-  finalTotal > 0
-    ? `${finalTotal.toLocaleString()}원 🎉`
-    : `${Math.abs(finalTotal).toLocaleString()}원`;
+  const showFinalTotal = finalTotal !== 0;
+  const changeColor = change > 0 ? "#22c55e" : change < 0 ? "#ef4444" : "#64748b";
+  const finalTotalColor = finalTotal > 0 ? "#22c55e" : "#ef4444";
+
+  const totalText =
+    finalTotal > 0
+      ? `${finalTotal.toLocaleString()}원 🎉`
+      : `${Math.abs(finalTotal).toLocaleString()}원`;
 
   return (
     <div
