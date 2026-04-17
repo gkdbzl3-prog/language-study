@@ -558,12 +558,17 @@ const carryOut = totalPool - distributedTotal;
 
                 {/* 멤버별 정산 내역 */}
 {memberStats.map(({ member, change, bonus, fine, details, available }) => {
-  const prize = prizeMap[member] || 0;
-  const finalTotal = bonus - fine + prize;
+const prize = prizeMap[member] || 0;
+const finalTotal = bonus - fine + prize;
 
-  const showFinalTotal = finalTotal > 0;
-  const changeColor = change > 0 ? "#22c55e" : change < 0 ? "#ef4444" : "#64748b";
-  const totalText = `${finalTotal.toLocaleString()}원 🎉`;
+const showFinalTotal = finalTotal !== 0;
+const changeColor = change > 0 ? "#22c55e" : change < 0 ? "#ef4444" : "#64748b";
+
+const finalTotalColor = finalTotal > 0 ? "#22c55e" : "#ef4444";
+const totalText =
+  finalTotal > 0
+    ? `${finalTotal.toLocaleString()}원 🎉`
+    : `${Math.abs(finalTotal).toLocaleString()}원`;
 
   return (
     <div
@@ -626,75 +631,54 @@ const carryOut = totalPool - distributedTotal;
           </span>
 
 {showFinalTotal && (
-  <span style={{ color: "#22c55e", fontSize: 16, fontWeight: 900 }}>
+  <span style={{ color: finalTotalColor, fontSize: 16, fontWeight: 900 }}>
     {totalText}
   </span>
-)}
-          
+)} 
          
         </div>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-        {details.map(({ week, count, fine: wf, bonus: wb, exempted }) => {
-          const s = STATUS[count];
-          const monday = weekKeyToFriday(week);
-          const label = `${monday.getMonth() + 1}/${monday.getDate()}`;
+<div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+  {details.map(({ week, count, exempted }) => {
+    const s = STATUS[count];
+    const monday = weekKeyToFriday(week);
+    const label = `${monday.getMonth() + 1}/${monday.getDate()}`;
 
-          return (
-            <div
-              key={week}
-              style={{
-                position: "relative",
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                background: exempted ? "#1a2e05" : s.bg,
-                border: `1px solid ${exempted ? "#3f6212" : s.border}`,
-                borderRadius: 8,
-                padding: "4px 8px",
-                fontSize: 11
-              }}
-            >
-              <span style={{ color: "#64748b" }}>{label}</span>
-              <span style={{ color: s.color, fontWeight: 600 }}>
-                {s.emoji}{count}
-              </span>
+    return (
+      <div
+        key={week}
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          background: exempted ? "#1a2e05" : s.bg,
+          border: `1px solid ${exempted ? "#3f6212" : s.border}`,
+          borderRadius: 8,
+          padding: "4px 8px",
+          fontSize: 11
+        }}
+      >
+        <span style={{ color: "#64748b" }}>{label}</span>
 
-              {exempted ? (
-                <span
-                  style={{ color: "#22c55e", fontWeight: 700, cursor: "pointer" }}
-                  onClick={() => toggleExemption(member, week)}
-                >
-                  🎫
-                </span>
-              ) : wb > 0 ? (
-                <span style={{ color: "#4ade80", fontWeight: 700 }}>
-                  +{wb}
-                </span>
-              ) : (
-                <span style={{ color: "#f87171", fontWeight: 700 }}>
-                  {wf > 0 ? `-${wf}` : ""}
-                </span>
-              )}
-
-              {!exempted && count < 3 && available > 0 && (
-                <span
-                  onClick={() => toggleExemption(member, week)}
-                  style={{
-                    cursor: "pointer",
-                    fontSize: 10,
-                    color: "#38bdf8",
-                    textDecoration: "underline"
-                  }}
-                >
-                  면제
-                </span>
-              )}
-            </div>
-          );
-        })}
+        {!exempted && count < 3 && available > 0 && (
+          <span
+            onClick={() => toggleExemption(member, week)}
+            style={{
+              cursor: "pointer",
+              fontSize: 10,
+              color: "#38bdf8",
+              textDecoration: "underline"
+            }}
+          >
+            면제
+          </span>
+        )}
       </div>
+    );
+  })}
+</div>
     </div>
   );
 })}
