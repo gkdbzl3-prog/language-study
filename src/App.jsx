@@ -13,6 +13,8 @@ const STATUS = {
   7: { color: "#ec4899", bg: "#500724", border: "#9d174d", emoji: "🌟", text: "7회 +400" },
 };
 
+const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+
 // 주차 기준: 금요일~목요일
 // weekKey = "YYYY-MM-DD" (해당 주 금요일 날짜 문자열)
 
@@ -49,25 +51,44 @@ function shiftWeek(weekKey, delta) {
   return `${y}-${m}-${d}`;
 }
 
+function formatDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function formatFullDate(date) {
+  return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 (${DAY_LABELS[date.getDay()]})`;
+}
+
+function getMonthKey(year, month) {
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+function sanitizeAmount(value) {
+  const amount = Math.floor(Number(value) || 0);
+  return amount > 0 ? amount : 0;
+}
+
 function dateToWeekKey(date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
   const daysBack = (d.getDay() + 2) % 7;
   d.setDate(d.getDate() - daysBack);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
+  return formatDateKey(d);
 }
 
 function getWeeksInMonth(year, month) {
   const weeks = [];
   const d = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  while (d <= lastDay) {
-    const wk = dateToWeekKey(d);
-    if (!weeks.includes(wk)) weeks.push(wk);
-    d.setDate(d.getDate() + 1);
+  d.setHours(0, 0, 0, 0);
+  const daysUntilFriday = (5 - d.getDay() + 7) % 7;
+  d.setDate(d.getDate() + daysUntilFriday);
+
+  while (d.getMonth() === month) {
+    weeks.push(formatDateKey(d));
+    d.setDate(d.getDate() + 7);
   }
   return weeks;
 }
@@ -82,8 +103,9 @@ export default function StudyDashboard() {
   const [members, setMembers] = useState([]);
   const [weekData, setWeekData] = useState({});
   const [exemptions, setExemptions] = useState({});
+  const [rewardDecisions, setRewardDecisions] = useState({});
   const [dbLoaded, setDbLoaded] = useState(false);
-  const loadedRef = useRef({ members: false, weekData: false, exemptions: false });
+  const loadedRef = useRef({ members: false, weekData: false, exemptions: false, rewardDecisions: false });
 
   const [viewWeek, setViewWeek] = useState(getCurrentWeekKey());
   const [newMember, setNewMember] = useState("");
@@ -114,8 +136,12 @@ export default function StudyDashboard() {
       setExemptions(snap.val() || {});
       markLoaded("exemptions");
     });
+    const unsubRewardDecisions = onValue(ref(db, "rewardDecisions"), (snap) => {
+      setRewardDecisions(snap.val() || {});
+      markLoaded("rewardDecisions");
+    });
 
-    return () => { unsubMembers(); unsubWeekData(); unsubExemptions(); };
+    return () => { unsubMembers(); unsubWeekData(); unsubExemptions(); unsubRewardDecisions(); };
   }, []);
 
   // 멤버별 전체 도장 수 (3회 이상 달성 주 수)
@@ -142,8 +168,44 @@ export default function StudyDashboard() {
 
   const isExempted = (member, weekKey) => (exemptions[member]?.usedExemptions || []).includes(weekKey);
 
+  const settleMonthKey = getMonthKey(settleMonth.year, settleMonth.month);
   const settleWeeks = getWeeksInMonth(settleMonth.year, settleMonth.month);
   const settleMonthLabel = `${settleMonth.year}년 ${settleMonth.month + 1}월`;
+  const settleRewardDate = (() => {
+    const lastWeek = settleWeeks[settleWeeks.length - 1];
+    if (!lastWeek) return null;
+    const rewardDate = weekKeyToFriday(lastWeek);
+    rewardDate.setDate(rewardDate.getDate() + 7);
+    return rewardDate;
+  })();
+  const settleCloseDate = settleRewardDate ? new Date(settleRewardDate) : null;
+  if (settleCloseDate) settleCloseDate.setDate(settleCloseDate.getDate() - 1);
+
+  const updateRewardDecision = (monthKey, slotKey, decision) => {
+    const next = {
+      ...rewardDecisions,
+      [monthKey]: {
+        ...(rewardDecisions[monthKey] || {}),
+        [slotKey]: decision,
+      },
+    };
+    setRewardDecisions(next);
+    fbSet("rewardDecisions", next);
+  };
+
+  const carryoverTotals = Object.values(rewardDecisions).reduce((acc, monthData) => {
+    Object.values(monthData || {}).forEach((decision) => {
+      if (!decision || decision.status !== "carry" || !decision.member) return;
+      const amount = sanitizeAmount(decision.amount);
+      if (amount <= 0) return;
+      acc[decision.member] = (acc[decision.member] || 0) + amount;
+    });
+    return acc;
+  }, {});
+
+  const carryoverMembers = Object.entries(carryoverTotals)
+    .filter(([, amount]) => amount > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"));
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2000); };
 
@@ -409,14 +471,46 @@ export default function StudyDashboard() {
           const totalBonus = memberStats.reduce((s, m) => s + m.bonus, 0);
           const totalPool = totalFine + totalBonus;
 
-          const monthlyPerfect = members.map((member) => ({
+          const monthlyPerfect = members.map((member, index) => ({
             member,
+            index,
             count: settleWeeks.filter((w) => (getCount(w, member) ?? -1) >= 3).length,
-          })).sort((a, b) => b.count - a.count);
-          const top1Count = monthlyPerfect[0]?.count || 0;
-          const top1 = monthlyPerfect.filter((m) => m.count === top1Count && m.count > 0);
-          const top2Count = monthlyPerfect.find((m) => m.count < top1Count)?.count || 0;
-          const top2 = monthlyPerfect.filter((m) => m.count === top2Count && m.count > 0);
+          })).sort((a, b) => (b.count - a.count) || (a.index - b.index));
+          const rankedMembers = monthlyPerfect.filter((m) => m.count > 0);
+          const top1 = rankedMembers[0] || null;
+          const top2 = rankedMembers[1] || null;
+          const top1Count = top1?.count || 0;
+          const top2Count = top2?.count || 0;
+          const rewardSlots = [
+            top1 ? { slotKey: "top1", rank: 1, badge: "🥇", title: "1등", member: top1.member, count: top1.count, colors: { bg: "linear-gradient(135deg,#fbbf24,#f59e0b)", text: "#451a03", sub: "#78350f" } } : null,
+            totalPool >= 10000 && top2 ? { slotKey: "top2", rank: 2, badge: "🥈", title: "2등", member: top2.member, count: top2.count, colors: { bg: "linear-gradient(135deg,#94a3b8,#cbd5e1)", text: "#1e293b", sub: "#334155" } } : null,
+          ].filter(Boolean);
+          const splitBase = rewardSlots.length ? Math.floor(totalPool / rewardSlots.length) : 0;
+          const splitRemainder = rewardSlots.length ? totalPool % rewardSlots.length : 0;
+          const monthRewardDecisions = rewardDecisions[settleMonthKey] || {};
+          const rewardRecipients = rewardSlots.map((slot, index) => {
+            const stored = monthRewardDecisions[slot.slotKey];
+            const sameMember = stored?.member === slot.member;
+            const defaultAmount = rewardSlots.length === 1
+              ? totalPool
+              : splitBase + (index === 0 ? splitRemainder : 0);
+            const amount = sameMember && sanitizeAmount(stored?.amount) > 0
+              ? sanitizeAmount(stored.amount)
+              : defaultAmount;
+            const status = sameMember ? (stored?.status || null) : null;
+            const currentCarry = status === "carry" ? amount : 0;
+            const previousCarryover = Math.max((carryoverTotals[slot.member] || 0) - currentCarry, 0);
+            return { ...slot, amount, status, previousCarryover };
+          });
+          const saveRewardDecision = (slot, patch = {}) => {
+            updateRewardDecision(settleMonthKey, slot.slotKey, {
+              member: slot.member,
+              rank: slot.rank,
+              count: slot.count,
+              amount: "amount" in patch ? sanitizeAmount(patch.amount) : slot.amount,
+              status: "status" in patch ? patch.status : slot.status,
+            });
+          };
 
           return (
             <div>
@@ -432,6 +526,16 @@ export default function StudyDashboard() {
                   return m > 11 ? { year: p.year + 1, month: 0 } : { ...p, month: m };
                 })}>▶</NavBtn>
               </div>
+
+              {settleRewardDate && settleCloseDate && (
+                <div style={{ marginBottom: 12, background: "#0a0f1e", borderRadius: 12, padding: "12px 14px", border: "1px solid #334155" }}>
+                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6 }}>금요일 시작 주차 기준</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 12, color: "#cbd5e1" }}>누계 마감 {formatFullDate(settleCloseDate)}</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: "#fbbf24" }}>🎁 상품 증정 {formatFullDate(settleRewardDate)}</span>
+                  </div>
+                </div>
+              )}
 
               {/* 🏅 칭찬도장 모음판 */}
               <div style={{ background: "#111827", borderRadius: 14, padding: 16, border: "1px solid #1e293b", marginBottom: 12 }}>
@@ -543,20 +647,59 @@ export default function StudyDashboard() {
               {/* 🎁 예상 상품증정 */}
               <div style={{ background: "#111827", borderRadius: 14, padding: 16, border: "1px solid #1e293b" }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 14 }}>🎁 예상 상품증정</div>
-                {top1.length > 0 ? (
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ background: "linear-gradient(135deg,#fbbf24,#f59e0b)", borderRadius: 14, padding: "16px", marginBottom: 8 }}>
-                      <div style={{ fontSize: 12, color: "#78350f", fontWeight: 700, marginBottom: 4 }}>🥇 1등</div>
-                      <div style={{ fontSize: 22, fontWeight: 900, color: "#451a03" }}>{top1.map(m => m.member).join(", ")}</div>
-                      <div style={{ fontSize: 12, color: "#78350f", marginTop: 4 }}>이달 {top1Count}주 완료 달성</div>
+                {top1 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ background: "#0a0f1e", border: "1px solid #334155", borderRadius: 12, padding: "12px 14px" }}>
+                      <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>예상 상품 예산 {totalPool.toLocaleString()}원</div>
+                      <div style={{ fontSize: 11, color: "#64748b" }}>수상 금액은 직접 수정 가능하고, 이월 선택 시 멤버별 누계에 바로 반영돼</div>
                     </div>
-                    {totalPool >= 10000 && top2.length > 0 ? (
-                      <div style={{ background: "linear-gradient(135deg,#94a3b8,#cbd5e1)", borderRadius: 14, padding: "14px" }}>
-                        <div style={{ fontSize: 12, color: "#334155", fontWeight: 700, marginBottom: 4 }}>🥈 2등</div>
-                        <div style={{ fontSize: 18, fontWeight: 900, color: "#1e293b" }}>{top2.map(m => m.member).join(", ")}</div>
-                        <div style={{ fontSize: 12, color: "#334155", marginTop: 4 }}>이달 {top2Count}주 완료 달성</div>
+
+                    {rewardRecipients.map((slot) => (
+                      <div key={slot.slotKey} style={{ background: slot.colors.bg, borderRadius: 14, padding: "16px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+                          <div>
+                            <div style={{ fontSize: 12, color: slot.colors.sub, fontWeight: 700, marginBottom: 4 }}>{slot.badge} {slot.title}</div>
+                            <div style={{ fontSize: 22, fontWeight: 900, color: slot.colors.text }}>{slot.member}</div>
+                            <div style={{ fontSize: 12, color: slot.colors.sub, marginTop: 4 }}>이달 {slot.count}주 완료 달성</div>
+                          </div>
+                          <div style={{ minWidth: 120 }}>
+                            <div style={{ fontSize: 11, color: slot.colors.sub, marginBottom: 4 }}>지급 금액</div>
+                            <input
+                              type="number"
+                              min="0"
+                              value={slot.amount}
+                              onChange={(e) => saveRewardDecision(slot, { amount: e.target.value })}
+                              style={{ width: "100%", background: "rgba(255,255,255,0.72)", border: "1px solid rgba(15,23,42,0.18)", borderRadius: 10, padding: "8px 10px", color: "#0f172a", fontSize: 14, fontWeight: 800, boxSizing: "border-box", fontFamily: "inherit" }}
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                          <button
+                            onClick={() => saveRewardDecision(slot, { status: "paid" })}
+                            style={{ padding: "8px 12px", borderRadius: 10, border: slot.status === "paid" ? "1px solid #065f46" : "1px solid rgba(15,23,42,0.18)", background: slot.status === "paid" ? "#ecfdf5" : "rgba(255,255,255,0.72)", color: "#065f46", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}
+                          >
+                            증정
+                          </button>
+                          <button
+                            onClick={() => saveRewardDecision(slot, { status: "carry" })}
+                            style={{ padding: "8px 12px", borderRadius: 10, border: slot.status === "carry" ? "1px solid #92400e" : "1px solid rgba(15,23,42,0.18)", background: slot.status === "carry" ? "#fef3c7" : "rgba(255,255,255,0.72)", color: "#92400e", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}
+                          >
+                            이월
+                          </button>
+                        </div>
+
+                        <div style={{ fontSize: 12, color: slot.colors.sub, fontWeight: 700 }}>
+                          {slot.status === "carry"
+                            ? `이월 누계 ${(carryoverTotals[slot.member] || 0).toLocaleString()}원`
+                            : slot.previousCarryover > 0
+                              ? `기존 이월 누계 ${slot.previousCarryover.toLocaleString()}원`
+                              : "이월 누계 없음"}
+                        </div>
                       </div>
-                    ) : totalPool < 10000 ? (
+                    ))}
+
+                    {totalPool < 10000 ? (
                       <div style={{ background: "#0a0f1e", border: "1px dashed #334155", borderRadius: 12, padding: "12px", textAlign: "center" }}>
                         <div style={{ fontSize: 12, color: "#475569" }}>상품 예산 10,000원 이상 시 2등도 선정</div>
                         <div style={{ fontSize: 13, color: "#64748b", fontWeight: 700, marginTop: 4 }}>현재 {totalPool.toLocaleString()}원 / 10,000원</div>
@@ -565,6 +708,22 @@ export default function StudyDashboard() {
                         </div>
                       </div>
                     ) : null}
+
+                    <div style={{ background: "#0a0f1e", border: "1px solid #334155", borderRadius: 12, padding: "12px 14px" }}>
+                      <div style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 700, marginBottom: 8 }}>이월 누계</div>
+                      {carryoverMembers.length > 0 ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {carryoverMembers.map(([member, amount]) => (
+                            <div key={member} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
+                              <span style={{ color: "#cbd5e1", fontWeight: 600 }}>{member}</span>
+                              <span style={{ color: "#fbbf24", fontWeight: 800 }}>{amount.toLocaleString()}원</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 12, color: "#475569" }}>아직 이월된 상품 금액이 없어</div>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div style={{ textAlign: "center", padding: "20px 0", color: "#334155" }}>

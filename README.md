@@ -2,8 +2,8 @@
 
 ## 로컬 실행
 ```bash
-npm install
-npm run dev -- --host
+pnpm install
+pnpm dev -- --host
 ```
 브라우저에서 http://localhost:5173 또는 네트워크 IP로 접속
 
