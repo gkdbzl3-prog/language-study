@@ -195,10 +195,15 @@ export default function StudyDashboard() {
 
   const carryoverTotals = Object.values(rewardDecisions).reduce((acc, monthData) => {
     Object.values(monthData || {}).forEach((decision) => {
-      if (!decision || decision.status !== "carry" || !decision.member) return;
-      const amount = sanitizeAmount(decision.amount);
-      if (amount <= 0) return;
-      acc[decision.member] = (acc[decision.member] || 0) + amount;
+      if (!decision || !decision.member) return;
+      if (decision.status === "carry") {
+        const amount = sanitizeAmount(decision.amount);
+        if (amount > 0) acc[decision.member] = (acc[decision.member] || 0) + amount;
+      }
+      if (decision.status === "paid" && decision.consumedCarryover) {
+        const consumed = sanitizeAmount(decision.consumedCarryover);
+        if (consumed > 0) acc[decision.member] = (acc[decision.member] || 0) - consumed;
+      }
     });
     return acc;
   }, {});
@@ -499,17 +504,22 @@ export default function StudyDashboard() {
               ? sanitizeAmount(stored.amount)
               : defaultAmount;
             const status = sameMember ? (stored?.status || null) : null;
+            const consumedCarryover = sameMember ? sanitizeAmount(stored?.consumedCarryover) : 0;
             const currentCarry = status === "carry" ? amount : 0;
             const previousCarryover = Math.max((carryoverTotals[slot.member] || 0) - currentCarry, 0);
-            return { ...slot, amount, status, previousCarryover };
+            return { ...slot, amount, status, previousCarryover, consumedCarryover };
           });
           const saveRewardDecision = (slot, patch = {}) => {
+            const newStatus = "status" in patch ? patch.status : slot.status;
             updateRewardDecision(settleMonthKey, slot.slotKey, {
               member: slot.member,
               rank: slot.rank,
               count: slot.count,
               amount: "amount" in patch ? sanitizeAmount(patch.amount) : slot.amount,
-              status: "status" in patch ? patch.status : slot.status,
+              status: newStatus,
+              consumedCarryover: "consumedCarryover" in patch
+                ? sanitizeAmount(patch.consumedCarryover)
+                : (newStatus === "carry" ? 0 : (slot.consumedCarryover || 0)),
             });
           };
 
@@ -677,13 +687,21 @@ export default function StudyDashboard() {
 
                         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
                           <button
-                            onClick={() => saveRewardDecision(slot, { status: "paid" })}
+                            onClick={() => saveRewardDecision(slot, {
+                              status: "paid",
+                              amount: slot.amount + slot.previousCarryover,
+                              consumedCarryover: slot.previousCarryover,
+                            })}
                             style={{ padding: "8px 12px", borderRadius: 10, border: slot.status === "paid" ? "1px solid #065f46" : "1px solid rgba(15,23,42,0.18)", background: slot.status === "paid" ? "#ecfdf5" : "rgba(255,255,255,0.72)", color: "#065f46", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}
                           >
                             증정
                           </button>
                           <button
-                            onClick={() => saveRewardDecision(slot, { status: "carry" })}
+                            onClick={() => saveRewardDecision(slot, {
+                              status: "carry",
+                              amount: Math.max(slot.amount - (slot.consumedCarryover || 0), 0),
+                              consumedCarryover: 0,
+                            })}
                             style={{ padding: "8px 12px", borderRadius: 10, border: slot.status === "carry" ? "1px solid #92400e" : "1px solid rgba(15,23,42,0.18)", background: slot.status === "carry" ? "#fef3c7" : "rgba(255,255,255,0.72)", color: "#92400e", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}
                           >
                             이월
@@ -693,9 +711,11 @@ export default function StudyDashboard() {
                         <div style={{ fontSize: 12, color: slot.colors.sub, fontWeight: 700 }}>
                           {slot.status === "carry"
                             ? `이월 누계 ${(carryoverTotals[slot.member] || 0).toLocaleString()}원`
-                            : slot.previousCarryover > 0
-                              ? `기존 이월 누계 ${slot.previousCarryover.toLocaleString()}원`
-                              : "이월 누계 없음"}
+                            : slot.status === "paid" && slot.consumedCarryover > 0
+                              ? `이전 이월 ${slot.consumedCarryover.toLocaleString()}원 포함 지급`
+                              : slot.previousCarryover > 0
+                                ? `기존 이월 누계 ${slot.previousCarryover.toLocaleString()}원`
+                                : "이월 누계 없음"}
                         </div>
                       </div>
                     ))}
