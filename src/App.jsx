@@ -475,7 +475,8 @@ export default function StudyDashboard() {
             member,
             index,
             count: settleWeeks.filter((w) => (getCount(w, member) ?? -1) >= 3).length,
-          })).sort((a, b) => (b.count - a.count) || (a.index - b.index));
+            totalCount: settleWeeks.reduce((sum, w) => sum + (getCount(w, member) ?? 0), 0),
+          })).sort((a, b) => (b.count - a.count) || (b.totalCount - a.totalCount) || (a.index - b.index));
           const rankedMembers = monthlyPerfect.filter((m) => m.count > 0);
           const top1 = rankedMembers[0] || null;
           const top2 = rankedMembers[1] || null;
@@ -651,7 +652,7 @@ export default function StudyDashboard() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     <div style={{ background: "#0a0f1e", border: "1px solid #334155", borderRadius: 12, padding: "12px 14px" }}>
                       <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>예상 상품 예산 {totalPool.toLocaleString()}원</div>
-                      <div style={{ fontSize: 11, color: "#64748b" }}>수상 금액은 직접 수정 가능하고, 이월 선택 시 멤버별 누계에 바로 반영돼</div>
+                      <div style={{ fontSize: 11, color: "#64748b" }}>수상 금액은 직접 수정 가능하고, 이월 선택 시 멤버별 누계에 바로 반영돼요</div>
                     </div>
 
                     {rewardRecipients.map((slot) => (
@@ -721,7 +722,7 @@ export default function StudyDashboard() {
                           ))}
                         </div>
                       ) : (
-                        <div style={{ fontSize: 12, color: "#475569" }}>아직 이월된 상품 금액이 없어</div>
+                        <div style={{ fontSize: 12, color: "#475569" }}>아직 이월된 상품 금액이 없어요</div>
                       )}
                     </div>
                   </div>
