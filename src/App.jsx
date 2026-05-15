@@ -3,14 +3,21 @@ import { ref, onValue, set } from "firebase/database";
 import { db } from "./firebase";
 
 const STATUS = {
-  0: { color: "#ef4444", bg: "#3f0f0f", border: "#7f1d1d", emoji: "😴", text: "미인증" },
-  1: { color: "#f97316", bg: "#431407", border: "#7c2d12", emoji: "🔥", text: "1회" },
-  2: { color: "#84cc16", bg: "#1a2e05", border: "#3f6212", emoji: "✅", text: "2회" },
-  3: { color: "#22c55e", bg: "#052e16", border: "#14532d", emoji: "🏆", text: "완료" },
-  4: { color: "#eab308", bg: "#422006", border: "#713f12", emoji: "⭐", text: "4회 +100" },
-  5: { color: "#06b6d4", bg: "#083344", border: "#155e75", emoji: "💎", text: "5회 +200" },
-  6: { color: "#a855f7", bg: "#3b0764", border: "#6b21a8", emoji: "👑", text: "6회 +300" },
-  7: { color: "#ec4899", bg: "#500724", border: "#9d174d", emoji: "🌟", text: "7회 +400" },
+  0:  { color: "#ef4444", bg: "#3f0f0f", border: "#7f1d1d", emoji: "😴", text: "미인증" },
+  1:  { color: "#f97316", bg: "#431407", border: "#7c2d12", emoji: "🔥", text: "1회" },
+  2:  { color: "#84cc16", bg: "#1a2e05", border: "#3f6212", emoji: "✅", text: "2회" },
+  3:  { color: "#22c55e", bg: "#052e16", border: "#14532d", emoji: "🏆", text: "완료" },
+  4:  { color: "#eab308", bg: "#422006", border: "#713f12", emoji: "⭐", text: "4회 +100" },
+  5:  { color: "#06b6d4", bg: "#083344", border: "#155e75", emoji: "💎", text: "5회 +200" },
+  6:  { color: "#a855f7", bg: "#3b0764", border: "#6b21a8", emoji: "👑", text: "6회 +300" },
+  7:  { color: "#ec4899", bg: "#500724", border: "#9d174d", emoji: "🌟", text: "7회 +400" },
+  8:  { color: "#f43f5e", bg: "#4c0519", border: "#9f1239", emoji: "🚀", text: "8회 +500" },
+  9:  { color: "#10b981", bg: "#022c22", border: "#065f46", emoji: "🌈", text: "9회 +600" },
+  10: { color: "#3b82f6", bg: "#172554", border: "#1e40af", emoji: "⚡", text: "10회 +700" },
+  11: { color: "#f59e0b", bg: "#451a03", border: "#92400e", emoji: "🎯", text: "11회 +800" },
+  12: { color: "#8b5cf6", bg: "#2e1065", border: "#5b21b6", emoji: "🔮", text: "12회 +900" },
+  13: { color: "#14b8a6", bg: "#042f2e", border: "#0f766e", emoji: "🎪", text: "13회 +1000" },
+  14: { color: "#fbbf24", bg: "#2c1a00", border: "#a16207", emoji: "💥", text: "14회 +1100" },
 };
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -93,7 +100,7 @@ function getWeeksInMonth(year, month) {
   return weeks;
 }
 
-const FINE_MAP = { 0: 1000, 1: 700, 2: 400, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
+const FINE_MAP = { 0: 1000, 1: 700, 2: 400, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0, 11: 0, 12: 0, 13: 0, 14: 0 };
 const BONUS_3 = 800; // 3회 이상 달성 시 기본 적립금 (4회부터 100원씩 추가)
 
 // Firebase 쓰기 헬퍼
@@ -338,7 +345,7 @@ export default function StudyDashboard() {
                         {cfg && <span style={{ color: cfg.color, fontSize: 13, fontWeight: 700 }}>{cfg.emoji} {cfg.text}</span>}
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {[[0,1,2,3],[4,5,6,7]].map((row, ri) => (
+                        {[[0,1,2,3,4],[5,6,7,8,9],[10,11,12,13,14]].map((row, ri) => (
                           <div key={ri} style={{ display: "flex", gap: 7 }}>
                             {row.map((n) => {
                               const s = STATUS[n];
@@ -365,7 +372,7 @@ export default function StudyDashboard() {
           <div>
             <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>최근 8주 · 멤버별 인증 현황 (셀 클릭 → 해당 주 입력)</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-              {[7,6,5,4,3,2,1,0].map(n => {
+              {[14,13,12,11,10,9,8,7,6,5,4,3,2,1,0].map(n => {
                 const s = STATUS[n];
                 return (
                   <div key={n} style={{ display: "flex", alignItems: "center", gap: 5, background: s.bg, borderRadius: 8, padding: "5px 10px", border: `1px solid ${s.border}` }}>
@@ -434,8 +441,8 @@ export default function StudyDashboard() {
             {members.length > 0 && (
               <div style={{ marginTop: 20, background: "#111827", borderRadius: 14, padding: 16, border: "1px solid #1e293b" }}>
                 <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>이번 주 요약</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
-                  {[7,6,5,4,3,2,1,0].map(n => {
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8 }}>
+                  {[14,13,12,11,10,9,8,7,6,5,4,3,2,1,0].map(n => {
                     const s = STATUS[n];
                     const cnt = members.filter(m => getCount(getCurrentWeekKey(), m) === n).length;
                     return (
