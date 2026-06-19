@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set } from "firebase/database";
 import { db } from "./firebase";
 
-// 뱃지는 📝 하나로 통일하고 숫자만 변함. 색은 3단계(미달/진행/완료)로 구분
+// 뱃지는 숫자만 변하게 통일: 3개 미만은 ⚠️, 3개 이상은 📝. 색은 3단계(미달/진행/완료)로 구분
 const TIER = {
   fail: { color: "#ef4444", bg: "#3f0f0f", border: "#7f1d1d" }, // 0개: 미달
   prog: { color: "#f59e0b", bg: "#431407", border: "#7c2d12" }, // 1~2개: 진행
@@ -13,7 +13,7 @@ const statusText = (n) =>
 const STATUS = Object.fromEntries(
   Array.from({ length: 15 }, (_, n) => {
     const tier = n === 0 ? TIER.fail : n < 3 ? TIER.prog : TIER.done;
-    return [n, { ...tier, emoji: "📝", text: statusText(n) }];
+    return [n, { ...tier, emoji: n < 3 ? "💸" : "👑", text: statusText(n) }];
   })
 );
 
@@ -318,7 +318,7 @@ export default function StudyDashboard() {
                         {cfg && <span style={{ color: cfg.color, fontSize: 13, fontWeight: 700 }}>{cfg.emoji} {cfg.text}</span>}
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {[[0,1,2,3,4],[5,6,7,8,9],[10,11,12,13,14]].map((row, ri) => (
+                        {[[0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10, 11, 12, 13, 14]].map((row, ri) => (
                           <div key={ri} style={{ display: "flex", gap: 7 }}>
                             {row.map((n) => {
                               const s = STATUS[n];
@@ -345,7 +345,7 @@ export default function StudyDashboard() {
           <div>
             <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>최근 8주 · 멤버별 인증 현황 (셀 클릭 → 해당 주 입력)</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-              {[14,13,12,11,10,9,8,7,6,5,4,3,2,1,0].map(n => {
+              {[14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map(n => {
                 const s = STATUS[n];
                 return (
                   <div key={n} style={{ display: "flex", alignItems: "center", gap: 5, background: s.bg, borderRadius: 8, padding: "5px 10px", border: `1px solid ${s.border}` }}>
@@ -376,7 +376,7 @@ export default function StudyDashboard() {
                         const isCur = w === getCurrentWeekKey();
                         return (
                           <th key={w} style={{ padding: "4px 3px", fontSize: 10, color: isCur ? "#38bdf8" : "#475569", fontWeight: isCur ? 700 : 400, textAlign: "center", minWidth: 38 }}>
-                            <div>{`${fri.getMonth()+1}/${fri.getDate()}`}</div>
+                            <div>{`${fri.getMonth() + 1}/${fri.getDate()}`}</div>
                             {isCur && <div style={{ fontSize: 8, color: "#38bdf8", marginTop: 1 }}>●</div>}
                           </th>
                         );
@@ -415,7 +415,7 @@ export default function StudyDashboard() {
               <div style={{ marginTop: 20, background: "#111827", borderRadius: 14, padding: 16, border: "1px solid #1e293b" }}>
                 <div style={{ fontSize: 12, color: "#64748b", marginBottom: 12 }}>이번 주 요약</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8 }}>
-                  {[14,13,12,11,10,9,8,7,6,5,4,3,2,1,0].map(n => {
+                  {[14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map(n => {
                     const s = STATUS[n];
                     const cnt = members.filter(m => getCount(getCurrentWeekKey(), m) === n).length;
                     return (
@@ -569,69 +569,69 @@ export default function StudyDashboard() {
                 {memberStats.map(({ member, fine, bonus, details }) => {
                   const payout = payoutByMember[member];
                   return (
-                  <div key={member} style={{ marginBottom: 10, background: "#0a0f1e", borderRadius: 12, padding: "12px", border: "1px solid #1e293b" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                      <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        {bonus > 0 && (
-                          <span title="누적액 = 기본 상금 + 게시글 수 상금" style={{ fontSize: 13, fontWeight: 900, color: "#22c55e", cursor: "help" }}>
-                            {useNewSettle ? "" : "+"}{bonus.toLocaleString()}원
-                          </span>
-                        )}
-                        {fine > 0 ? (
-                          <span title="이번 달 벌금 합계" style={{ fontSize: 13, fontWeight: 900, color: "#ef4444", cursor: "help" }}>
-                            -{fine.toLocaleString()}원
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: 13, fontWeight: 700, color: "#475569" }}>
-                            벌금 0원 🎉
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {details.map(({ week, count, fine: wf }) => {
-                        const s = STATUS[count];
-                        const friday = weekKeyToFriday(week);
-                        const label = `${friday.getMonth()+1}/${friday.getDate()}`;
-                        const tip = `${label} 주 · 게시글 ${count}개${wf > 0 ? ` · 벌금 ${wf.toLocaleString()}원` : " · 벌금 없음"}`;
-                        return (
-                          <div key={week} title={tip} style={{ display: "flex", alignItems: "center", gap: 4, background: s.bg, border: `1px solid ${s.border}`, borderRadius: 8, padding: "4px 8px", fontSize: 11, cursor: "help" }}>
-                            <span style={{ color: "#64748b" }}>{label}</span>
-                            <span style={{ color: s.color, fontWeight: 600 }}>{s.emoji}{count}</span>
-                            {wf > 0 && <span style={{ color: "#f87171", fontWeight: 600 }}>{wf}</span>}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {useNewSettle && payout && bonus > 0 && (
-                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #1e293b" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                          <span style={{ fontSize: 11, color: "#94a3b8" }} title="이번 달 받을 누적액 (벌금은 매주 별도)">받을 누적액 <b style={{ color: "#22c55e" }}>{bonus.toLocaleString()}원</b></span>
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <button onClick={() => savePayoutDecision(payout, "paid")}
-                              style={{ padding: "6px 12px", borderRadius: 8, border: payout.status === "paid" ? "1px solid #14532d" : "1px solid #1e293b", background: payout.status === "paid" ? "#052e16" : "#0f172a", color: payout.status === "paid" ? "#22c55e" : "#94a3b8", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
-                              수령
-                            </button>
-                            <button onClick={() => savePayoutDecision(payout, "carry")}
-                              style={{ padding: "6px 12px", borderRadius: 8, border: payout.status === "carry" ? "1px solid #92400e" : "1px solid #1e293b", background: payout.status === "carry" ? "#3a2a05" : "#0f172a", color: payout.status === "carry" ? "#fbbf24" : "#94a3b8", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
-                              이월
-                            </button>
-                          </div>
+                    <div key={member} style={{ marginBottom: 10, background: "#0a0f1e", borderRadius: 12, padding: "12px", border: "1px solid #1e293b" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          {bonus > 0 && (
+                            <span title="누적액 = 기본 상금 + 게시글 수 상금" style={{ fontSize: 13, fontWeight: 900, color: "#22c55e", cursor: "help" }}>
+                              {useNewSettle ? "" : "+"}{bonus.toLocaleString()}원
+                            </span>
+                          )}
+                          {fine > 0 ? (
+                            <span title="이번 달 벌금 합계" style={{ fontSize: 13, fontWeight: 900, color: "#ef4444", cursor: "help" }}>
+                              -{fine.toLocaleString()}원
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "#475569" }}>
+                              벌금 0원 🎉
+                            </span>
+                          )}
                         </div>
-                        {(payout.status || payout.previousCarryover > 0) && (
-                          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6, fontWeight: 600 }}>
-                            {payout.status === "carry"
-                              ? `이월 누계 ${(carryoverTotals[member] || 0).toLocaleString()}원`
-                              : payout.status === "paid"
-                                ? (payout.consumedCarryover > 0 ? `이전 이월 ${payout.consumedCarryover.toLocaleString()}원 포함 수령` : "수령 완료")
-                                : `기존 이월 누계 ${payout.previousCarryover.toLocaleString()}원`}
-                          </div>
-                        )}
                       </div>
-                    )}
-                  </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        {details.map(({ week, count, fine: wf }) => {
+                          const s = STATUS[count];
+                          const friday = weekKeyToFriday(week);
+                          const label = `${friday.getMonth() + 1}/${friday.getDate()}`;
+                          const tip = `${label} 주 · 게시글 ${count}개${wf > 0 ? ` · 벌금 ${wf.toLocaleString()}원` : " · 벌금 없음"}`;
+                          return (
+                            <div key={week} title={tip} style={{ display: "flex", alignItems: "center", gap: 4, background: s.bg, border: `1px solid ${s.border}`, borderRadius: 8, padding: "4px 8px", fontSize: 11, cursor: "help" }}>
+                              <span style={{ color: "#64748b" }}>{label}</span>
+                              <span style={{ color: s.color, fontWeight: 600 }}>{s.emoji}{count}</span>
+                              {wf > 0 && <span style={{ color: "#f87171", fontWeight: 600 }}>{wf}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {useNewSettle && payout && bonus > 0 && (
+                        <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #1e293b" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                            <span style={{ fontSize: 11, color: "#94a3b8" }} title="이번 달 받을 누적액 (벌금은 매주 별도)">받을 누적액 <b style={{ color: "#22c55e" }}>{bonus.toLocaleString()}원</b></span>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button onClick={() => savePayoutDecision(payout, "paid")}
+                                style={{ padding: "6px 12px", borderRadius: 8, border: payout.status === "paid" ? "1px solid #14532d" : "1px solid #1e293b", background: payout.status === "paid" ? "#052e16" : "#0f172a", color: payout.status === "paid" ? "#22c55e" : "#94a3b8", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+                                수령
+                              </button>
+                              <button onClick={() => savePayoutDecision(payout, "carry")}
+                                style={{ padding: "6px 12px", borderRadius: 8, border: payout.status === "carry" ? "1px solid #92400e" : "1px solid #1e293b", background: payout.status === "carry" ? "#3a2a05" : "#0f172a", color: payout.status === "carry" ? "#fbbf24" : "#94a3b8", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+                                이월
+                              </button>
+                            </div>
+                          </div>
+                          {(payout.status || payout.previousCarryover > 0) && (
+                            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6, fontWeight: 600 }}>
+                              {payout.status === "carry"
+                                ? `이월 누계 ${(carryoverTotals[member] || 0).toLocaleString()}원`
+                                : payout.status === "paid"
+                                  ? (payout.consumedCarryover > 0 ? `이전 이월 ${payout.consumedCarryover.toLocaleString()}원 포함 수령` : "수령 완료")
+                                  : `기존 이월 누계 ${payout.previousCarryover.toLocaleString()}원`}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
                 {useNewSettle && (
@@ -655,103 +655,103 @@ export default function StudyDashboard() {
 
               {/* 🎁 예상 상품증정 (4월 이전 월) */}
               {!useNewSettle && (
-              <div style={{ background: "#111827", borderRadius: 14, padding: 16, border: "1px solid #1e293b" }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 14 }}>🎁 예상 상품증정</div>
-                {top1 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    <div style={{ background: "#0a0f1e", border: "1px solid #334155", borderRadius: 12, padding: "12px 14px" }}>
-                      <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>예상 상품 예산 {totalPool.toLocaleString()}원</div>
-                      <div style={{ fontSize: 11, color: "#64748b" }}>수상 금액은 직접 수정 가능하고, 이월 선택 시 멤버별 누계에 바로 반영돼요</div>
-                    </div>
-
-                    {rewardRecipients.map((slot) => (
-                      <div key={slot.slotKey} style={{ background: slot.colors.bg, borderRadius: 14, padding: "16px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
-                          <div>
-                            <div style={{ fontSize: 12, color: slot.colors.sub, fontWeight: 700, marginBottom: 4 }}>{slot.badge} {slot.title}</div>
-                            <div style={{ fontSize: 22, fontWeight: 900, color: slot.colors.text }}>{slot.member}</div>
-                            <div style={{ fontSize: 12, color: slot.colors.sub, marginTop: 4 }}>이달 {slot.count}주 완료 달성</div>
-                          </div>
-                          <div style={{ minWidth: 120 }}>
-                            <div style={{ fontSize: 11, color: slot.colors.sub, marginBottom: 4 }}>지급 금액</div>
-                            <input
-                              type="number"
-                              min="0"
-                              value={slot.amount}
-                              onChange={(e) => saveRewardDecision(slot, { amount: e.target.value })}
-                              style={{ width: "100%", background: "rgba(255,255,255,0.72)", border: "1px solid rgba(15,23,42,0.18)", borderRadius: 10, padding: "8px 10px", color: "#0f172a", fontSize: 14, fontWeight: 800, boxSizing: "border-box", fontFamily: "inherit" }}
-                            />
-                          </div>
-                        </div>
-
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-                          <button
-                            onClick={() => saveRewardDecision(slot, {
-                              status: "paid",
-                              amount: slot.amount + slot.previousCarryover,
-                              consumedCarryover: slot.previousCarryover,
-                            })}
-                            style={{ padding: "8px 12px", borderRadius: 10, border: slot.status === "paid" ? "1px solid #065f46" : "1px solid rgba(15,23,42,0.18)", background: slot.status === "paid" ? "#ecfdf5" : "rgba(255,255,255,0.72)", color: "#065f46", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}
-                          >
-                            증정
-                          </button>
-                          <button
-                            onClick={() => saveRewardDecision(slot, {
-                              status: "carry",
-                              amount: Math.max(slot.amount - (slot.consumedCarryover || 0), 0),
-                              consumedCarryover: 0,
-                            })}
-                            style={{ padding: "8px 12px", borderRadius: 10, border: slot.status === "carry" ? "1px solid #92400e" : "1px solid rgba(15,23,42,0.18)", background: slot.status === "carry" ? "#fef3c7" : "rgba(255,255,255,0.72)", color: "#92400e", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}
-                          >
-                            이월
-                          </button>
-                        </div>
-
-                        <div style={{ fontSize: 12, color: slot.colors.sub, fontWeight: 700 }}>
-                          {slot.status === "carry"
-                            ? `이월 누계 ${(carryoverTotals[slot.member] || 0).toLocaleString()}원`
-                            : slot.status === "paid" && slot.consumedCarryover > 0
-                              ? `이전 이월 ${slot.consumedCarryover.toLocaleString()}원 포함 지급`
-                              : slot.previousCarryover > 0
-                                ? `기존 이월 누계 ${slot.previousCarryover.toLocaleString()}원`
-                                : "이월 누계 없음"}
-                        </div>
+                <div style={{ background: "#111827", borderRadius: 14, padding: 16, border: "1px solid #1e293b" }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 14 }}>🎁 예상 상품증정</div>
+                  {top1 ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div style={{ background: "#0a0f1e", border: "1px solid #334155", borderRadius: 12, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>예상 상품 예산 {totalPool.toLocaleString()}원</div>
+                        <div style={{ fontSize: 11, color: "#64748b" }}>수상 금액은 직접 수정 가능하고, 이월 선택 시 멤버별 누계에 바로 반영돼요</div>
                       </div>
-                    ))}
 
-                    {totalPool < 10000 ? (
-                      <div style={{ background: "#0a0f1e", border: "1px dashed #334155", borderRadius: 12, padding: "12px", textAlign: "center" }}>
-                        <div style={{ fontSize: 12, color: "#475569" }}>상품 예산 10,000원 이상 시 2등도 선정</div>
-                        <div style={{ fontSize: 13, color: "#64748b", fontWeight: 700, marginTop: 4 }}>현재 {totalPool.toLocaleString()}원 / 10,000원</div>
-                        <div style={{ background: "#1e293b", borderRadius: 99, height: 6, marginTop: 8 }}>
-                          <div style={{ width: `${Math.min((totalPool / 10000) * 100, 100)}%`, height: "100%", background: "linear-gradient(90deg,#94a3b8,#cbd5e1)", borderRadius: 99, transition: "width 0.4s" }} />
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div style={{ background: "#0a0f1e", border: "1px solid #334155", borderRadius: 12, padding: "12px 14px" }}>
-                      <div style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 700, marginBottom: 8 }}>이월 누계</div>
-                      {carryoverMembers.length > 0 ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          {carryoverMembers.map(([member, amount]) => (
-                            <div key={member} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
-                              <span style={{ color: "#cbd5e1", fontWeight: 600 }}>{member}</span>
-                              <span style={{ color: "#fbbf24", fontWeight: 800 }}>{amount.toLocaleString()}원</span>
+                      {rewardRecipients.map((slot) => (
+                        <div key={slot.slotKey} style={{ background: slot.colors.bg, borderRadius: 14, padding: "16px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+                            <div>
+                              <div style={{ fontSize: 12, color: slot.colors.sub, fontWeight: 700, marginBottom: 4 }}>{slot.badge} {slot.title}</div>
+                              <div style={{ fontSize: 22, fontWeight: 900, color: slot.colors.text }}>{slot.member}</div>
+                              <div style={{ fontSize: 12, color: slot.colors.sub, marginTop: 4 }}>이달 {slot.count}주 완료 달성</div>
                             </div>
-                          ))}
+                            <div style={{ minWidth: 120 }}>
+                              <div style={{ fontSize: 11, color: slot.colors.sub, marginBottom: 4 }}>지급 금액</div>
+                              <input
+                                type="number"
+                                min="0"
+                                value={slot.amount}
+                                onChange={(e) => saveRewardDecision(slot, { amount: e.target.value })}
+                                style={{ width: "100%", background: "rgba(255,255,255,0.72)", border: "1px solid rgba(15,23,42,0.18)", borderRadius: 10, padding: "8px 10px", color: "#0f172a", fontSize: 14, fontWeight: 800, boxSizing: "border-box", fontFamily: "inherit" }}
+                              />
+                            </div>
+                          </div>
+
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                            <button
+                              onClick={() => saveRewardDecision(slot, {
+                                status: "paid",
+                                amount: slot.amount + slot.previousCarryover,
+                                consumedCarryover: slot.previousCarryover,
+                              })}
+                              style={{ padding: "8px 12px", borderRadius: 10, border: slot.status === "paid" ? "1px solid #065f46" : "1px solid rgba(15,23,42,0.18)", background: slot.status === "paid" ? "#ecfdf5" : "rgba(255,255,255,0.72)", color: "#065f46", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}
+                            >
+                              증정
+                            </button>
+                            <button
+                              onClick={() => saveRewardDecision(slot, {
+                                status: "carry",
+                                amount: Math.max(slot.amount - (slot.consumedCarryover || 0), 0),
+                                consumedCarryover: 0,
+                              })}
+                              style={{ padding: "8px 12px", borderRadius: 10, border: slot.status === "carry" ? "1px solid #92400e" : "1px solid rgba(15,23,42,0.18)", background: slot.status === "carry" ? "#fef3c7" : "rgba(255,255,255,0.72)", color: "#92400e", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}
+                            >
+                              이월
+                            </button>
+                          </div>
+
+                          <div style={{ fontSize: 12, color: slot.colors.sub, fontWeight: 700 }}>
+                            {slot.status === "carry"
+                              ? `이월 누계 ${(carryoverTotals[slot.member] || 0).toLocaleString()}원`
+                              : slot.status === "paid" && slot.consumedCarryover > 0
+                                ? `이전 이월 ${slot.consumedCarryover.toLocaleString()}원 포함 지급`
+                                : slot.previousCarryover > 0
+                                  ? `기존 이월 누계 ${slot.previousCarryover.toLocaleString()}원`
+                                  : "이월 누계 없음"}
+                          </div>
                         </div>
-                      ) : (
-                        <div style={{ fontSize: 12, color: "#475569" }}>아직 이월된 상품 금액이 없어요</div>
-                      )}
+                      ))}
+
+                      {totalPool < 10000 ? (
+                        <div style={{ background: "#0a0f1e", border: "1px dashed #334155", borderRadius: 12, padding: "12px", textAlign: "center" }}>
+                          <div style={{ fontSize: 12, color: "#475569" }}>상품 예산 10,000원 이상 시 2등도 선정</div>
+                          <div style={{ fontSize: 13, color: "#64748b", fontWeight: 700, marginTop: 4 }}>현재 {totalPool.toLocaleString()}원 / 10,000원</div>
+                          <div style={{ background: "#1e293b", borderRadius: 99, height: 6, marginTop: 8 }}>
+                            <div style={{ width: `${Math.min((totalPool / 10000) * 100, 100)}%`, height: "100%", background: "linear-gradient(90deg,#94a3b8,#cbd5e1)", borderRadius: 99, transition: "width 0.4s" }} />
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div style={{ background: "#0a0f1e", border: "1px solid #334155", borderRadius: 12, padding: "12px 14px" }}>
+                        <div style={{ fontSize: 12, color: "#e2e8f0", fontWeight: 700, marginBottom: 8 }}>이월 누계</div>
+                        {carryoverMembers.length > 0 ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {carryoverMembers.map(([member, amount]) => (
+                              <div key={member} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
+                                <span style={{ color: "#cbd5e1", fontWeight: 600 }}>{member}</span>
+                                <span style={{ color: "#fbbf24", fontWeight: 800 }}>{amount.toLocaleString()}원</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 12, color: "#475569" }}>아직 이월된 상품 금액이 없어요</div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div style={{ textAlign: "center", padding: "20px 0", color: "#334155" }}>
-                    <div style={{ fontSize: 36, marginBottom: 8 }}>🏆</div>
-                    <div style={{ fontSize: 13 }}>이달 3회 완료 달성자가 아직 없어요</div>
-                  </div>
-                )}
-              </div>
+                  ) : (
+                    <div style={{ textAlign: "center", padding: "20px 0", color: "#334155" }}>
+                      <div style={{ fontSize: 36, marginBottom: 8 }}>🏆</div>
+                      <div style={{ fontSize: 13 }}>이달 3회 완료 달성자가 아직 없어요</div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           );
