@@ -487,21 +487,21 @@ export default function StudyDashboard() {
           // 5월부터: 누적액(적립금) = 기본 상금 + 게시글 수 상금. 멤버별로 수령/이월 선택
           const payoutMonthDecisions = rewardDecisions[settleMonthKey] || {};
           const payoutByMember = {};
+          // 벌금은 매주 따로 걷으므로 월 정산 지급은 누적액(bonus)만 대상
           memberStats.forEach(({ member, fine, bonus }) => {
             const slotKey = `payout_${member}`;
-            const net = bonus - fine; // 실제 정산액 = 누적액 − 벌금
             const stored = payoutMonthDecisions[slotKey];
             const sameMember = stored?.member === member;
             const status = sameMember ? (stored?.status || null) : null;
             const consumedCarryover = sameMember ? sanitizeAmount(stored?.consumedCarryover) : 0;
-            const currentCarry = status === "carry" ? Math.max(net, 0) : 0;
+            const currentCarry = status === "carry" ? bonus : 0;
             const previousCarryover = Math.max((carryoverTotals[member] || 0) - currentCarry, 0);
-            payoutByMember[member] = { member, fine, bonus, net, slotKey, status, consumedCarryover, previousCarryover };
+            payoutByMember[member] = { member, fine, bonus, slotKey, status, consumedCarryover, previousCarryover };
           });
           const savePayoutDecision = (row, status) => {
             updateRewardDecision(settleMonthKey, row.slotKey, status === "paid"
-              ? { member: row.member, amount: row.net + row.previousCarryover, status: "paid", consumedCarryover: row.previousCarryover }
-              : { member: row.member, amount: Math.max(row.net, 0), status: "carry", consumedCarryover: 0 });
+              ? { member: row.member, amount: row.bonus + row.previousCarryover, status: "paid", consumedCarryover: row.previousCarryover }
+              : { member: row.member, amount: row.bonus, status: "carry", consumedCarryover: 0 });
           };
 
           const monthlyPerfect = members.map((member, index) => ({
@@ -688,7 +688,7 @@ export default function StudyDashboard() {
                     {useNewSettle && payout && bonus > 0 && (
                       <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #1e293b" }}>
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                          <span style={{ fontSize: 11, color: "#94a3b8" }} title={`누적액 ${bonus.toLocaleString()}원 − 벌금 ${fine.toLocaleString()}원`}>받을 금액(누적액 − 벌금) <b style={{ color: payout.net > 0 ? "#22c55e" : payout.net < 0 ? "#ef4444" : "#94a3b8" }}>{payout.net.toLocaleString()}원</b></span>
+                          <span style={{ fontSize: 11, color: "#94a3b8" }} title="이번 달 받을 누적액 (벌금은 매주 별도)">받을 누적액 <b style={{ color: "#22c55e" }}>{bonus.toLocaleString()}원</b></span>
                           <div style={{ display: "flex", gap: 6 }}>
                             <button onClick={() => savePayoutDecision(payout, "paid")}
                               style={{ padding: "6px 12px", borderRadius: 8, border: payout.status === "paid" ? "1px solid #14532d" : "1px solid #1e293b", background: payout.status === "paid" ? "#052e16" : "#0f172a", color: payout.status === "paid" ? "#22c55e" : "#94a3b8", fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
