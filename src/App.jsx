@@ -2,23 +2,20 @@ import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set } from "firebase/database";
 import { db } from "./firebase";
 
-const STATUS = {
-  0:  { color: "#ef4444", bg: "#3f0f0f", border: "#7f1d1d", emoji: "😴", text: "미인증" },
-  1:  { color: "#f97316", bg: "#431407", border: "#7c2d12", emoji: "🔥", text: "1회" },
-  2:  { color: "#84cc16", bg: "#1a2e05", border: "#3f6212", emoji: "✅", text: "2회" },
-  3:  { color: "#22c55e", bg: "#052e16", border: "#14532d", emoji: "🏆", text: "완료" },
-  4:  { color: "#eab308", bg: "#422006", border: "#713f12", emoji: "⭐", text: "4회 +100" },
-  5:  { color: "#06b6d4", bg: "#083344", border: "#155e75", emoji: "💎", text: "5회 +200" },
-  6:  { color: "#a855f7", bg: "#3b0764", border: "#6b21a8", emoji: "👑", text: "6회 +300" },
-  7:  { color: "#ec4899", bg: "#500724", border: "#9d174d", emoji: "🌟", text: "7회 +400" },
-  8:  { color: "#f43f5e", bg: "#4c0519", border: "#9f1239", emoji: "🚀", text: "8회 +500" },
-  9:  { color: "#10b981", bg: "#022c22", border: "#065f46", emoji: "🌈", text: "9회 +600" },
-  10: { color: "#3b82f6", bg: "#172554", border: "#1e40af", emoji: "⚡", text: "10회 +700" },
-  11: { color: "#f59e0b", bg: "#451a03", border: "#92400e", emoji: "🎯", text: "11회 +800" },
-  12: { color: "#8b5cf6", bg: "#2e1065", border: "#5b21b6", emoji: "🔮", text: "12회 +900" },
-  13: { color: "#14b8a6", bg: "#042f2e", border: "#0f766e", emoji: "🎪", text: "13회 +1000" },
-  14: { color: "#fbbf24", bg: "#2c1a00", border: "#a16207", emoji: "💥", text: "14회 +1100" },
+// 뱃지는 📝 하나로 통일하고 숫자만 변함. 색은 3단계(미달/진행/완료)로 구분
+const TIER = {
+  fail: { color: "#ef4444", bg: "#3f0f0f", border: "#7f1d1d" }, // 0개: 미달
+  prog: { color: "#f59e0b", bg: "#431407", border: "#7c2d12" }, // 1~2개: 진행
+  done: { color: "#22c55e", bg: "#052e16", border: "#14532d" }, // 3개 이상: 완료
 };
+const statusText = (n) =>
+  n === 0 ? "미인증" : n < 3 ? `${n}회` : n === 3 ? "완료" : `${n}회 +${(n - 3) * 100}`;
+const STATUS = Object.fromEntries(
+  Array.from({ length: 15 }, (_, n) => {
+    const tier = n === 0 ? TIER.fail : n < 3 ? TIER.prog : TIER.done;
+    return [n, { ...tier, emoji: "📝", text: statusText(n) }];
+  })
+);
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -109,10 +106,9 @@ const fbSet = (path, val) => set(ref(db, path), val);
 export default function StudyDashboard() {
   const [members, setMembers] = useState([]);
   const [weekData, setWeekData] = useState({});
-  const [exemptions, setExemptions] = useState({});
   const [rewardDecisions, setRewardDecisions] = useState({});
   const [dbLoaded, setDbLoaded] = useState(false);
-  const loadedRef = useRef({ members: false, weekData: false, exemptions: false, rewardDecisions: false });
+  const loadedRef = useRef({ members: false, weekData: false, rewardDecisions: false });
 
   const [viewWeek, setViewWeek] = useState(getCurrentWeekKey());
   const [newMember, setNewMember] = useState("");
@@ -139,41 +135,13 @@ export default function StudyDashboard() {
       setWeekData(snap.val() || {});
       markLoaded("weekData");
     });
-    const unsubExemptions = onValue(ref(db, "exemptions"), (snap) => {
-      setExemptions(snap.val() || {});
-      markLoaded("exemptions");
-    });
     const unsubRewardDecisions = onValue(ref(db, "rewardDecisions"), (snap) => {
       setRewardDecisions(snap.val() || {});
       markLoaded("rewardDecisions");
     });
 
-    return () => { unsubMembers(); unsubWeekData(); unsubExemptions(); unsubRewardDecisions(); };
+    return () => { unsubMembers(); unsubWeekData(); unsubRewardDecisions(); };
   }, []);
-
-  // 멤버별 전체 도장 수 (3회 이상 달성 주 수)
-  const getStamps = (member) =>
-    Object.keys(weekData).filter((w) => (weekData[w]?.[member] ?? -1) >= 3).length;
-
-  const getUsedExemptions = (member) => (exemptions[member]?.usedExemptions || []).length;
-  const getAvailableExemptions = (member) => Math.floor(getStamps(member) / 10) - getUsedExemptions(member);
-
-  const toggleExemption = (member, weekKey) => {
-    const memberData = exemptions[member] || { usedExemptions: [] };
-    const used = memberData.usedExemptions || [];
-    let newUsed;
-    if (used.includes(weekKey)) {
-      newUsed = used.filter((w) => w !== weekKey);
-    } else {
-      if (getAvailableExemptions(member) <= 0) return;
-      newUsed = [...used, weekKey];
-    }
-    const next = { ...exemptions, [member]: { ...memberData, usedExemptions: newUsed } };
-    setExemptions(next);
-    fbSet("exemptions", next);
-  };
-
-  const isExempted = (member, weekKey) => (exemptions[member]?.usedExemptions || []).includes(weekKey);
 
   const settleMonthKey = getMonthKey(settleMonth.year, settleMonth.month);
   const settleWeeks = getWeeksInMonth(settleMonth.year, settleMonth.month);
@@ -470,14 +438,13 @@ export default function StudyDashboard() {
             settleWeeks.forEach((w) => {
               const c = getCount(w, member);
               if (c === null) return;
-              const exempted = isExempted(member, w);
-              const weekFine = exempted ? 0 : (FINE_MAP[c] ?? 0);
+              const weekFine = FINE_MAP[c] ?? 0;
               const weekBonus = c >= 3 ? BONUS_3 + (c - 3) * 100 : 0;
               fine += weekFine;
               bonus += weekBonus;
-              details.push({ week: w, count: c, fine: weekFine, bonus: weekBonus, exempted });
+              details.push({ week: w, count: c, fine: weekFine, bonus: weekBonus });
             });
-            return { member, fine, bonus, total: fine + bonus, stamps: getStamps(member), available: getAvailableExemptions(member), details };
+            return { member, fine, bonus, details };
           });
           const totalFine = memberStats.reduce((s, m) => s + m.fine, 0);
           const totalBonus = memberStats.reduce((s, m) => s + m.bonus, 0);
@@ -576,45 +543,6 @@ export default function StudyDashboard() {
                 </div>
               )}
 
-              {/* 🏅 칭찬도장 모음판 */}
-              <div style={{ background: "#111827", borderRadius: 14, padding: 16, border: "1px solid #1e293b", marginBottom: 12 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 14 }}>🏅 칭찬도장 모음판</div>
-                {members.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "20px 0", color: "#334155", fontSize: 13 }}>멤버를 추가해주세요</div>
-                ) : members.map((member) => {
-                  const stamps = getStamps(member);
-                  const available = getAvailableExemptions(member);
-                  const totalExemptionsEarned = Math.floor(stamps / 10);
-                  const progress = stamps % 10;
-                  return (
-                    <div key={member} style={{ marginBottom: 10, padding: "12px 14px", background: "#0a0f1e", borderRadius: 12, border: "1px solid #1e293b" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 22 }}>🏅</span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                              <span style={{ fontWeight: 700, fontSize: 14 }}>{member}</span>
-                              <span style={{ fontSize: 12, color: "#64748b" }}>×{stamps}</span>
-                            </div>
-                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                              {available > 0 && <span style={{ background: "#052e16", border: "1px solid #14532d", borderRadius: 8, padding: "3px 8px", fontSize: 11, color: "#22c55e", fontWeight: 700 }}>🎫 {available}장</span>}
-                              <span style={{ fontSize: 11, color: "#475569" }}>다음 면제권까지 {10 - progress}개</span>
-                            </div>
-                          </div>
-                          <div style={{ background: "#1e293b", borderRadius: 99, height: 8, overflow: "hidden" }}>
-                            <div style={{ width: `${(progress / 10) * 100}%`, height: "100%", background: "linear-gradient(90deg, #22c55e, #4ade80)", borderRadius: 99, transition: "width 0.4s" }} />
-                          </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                            <span style={{ fontSize: 10, color: "#475569" }}>{progress}/10</span>
-                            {totalExemptionsEarned > 0 && <span style={{ fontSize: 10, color: "#475569" }}>누적 {totalExemptionsEarned}장 획득 · {getUsedExemptions(member)}장 사용</span>}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
               {/* 💰 벌금 & 적립금 상세 */}
               <div style={{ background: "#111827", borderRadius: 14, padding: 16, border: "1px solid #1e293b", marginBottom: 12 }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 14 }}>💰 {settleMonthLabel} 정산</div>
@@ -638,7 +566,7 @@ export default function StudyDashboard() {
                 </div>
 
                 {/* 멤버별 내역 */}
-                {memberStats.map(({ member, fine, bonus, details, available }) => {
+                {memberStats.map(({ member, fine, bonus, details }) => {
                   const payout = payoutByMember[member];
                   return (
                   <div key={member} style={{ marginBottom: 10, background: "#0a0f1e", borderRadius: 12, padding: "12px", border: "1px solid #1e293b" }}>
@@ -662,24 +590,16 @@ export default function StudyDashboard() {
                       </div>
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {details.map(({ week, count, fine: wf, exempted }) => {
+                      {details.map(({ week, count, fine: wf }) => {
                         const s = STATUS[count];
                         const friday = weekKeyToFriday(week);
                         const label = `${friday.getMonth()+1}/${friday.getDate()}`;
-                        const tip = `${label} 주 · 게시글 ${count}개${exempted ? " · 면제권 사용 (벌금 면제)" : wf > 0 ? ` · 벌금 ${wf.toLocaleString()}원` : " · 벌금 없음"}`;
+                        const tip = `${label} 주 · 게시글 ${count}개${wf > 0 ? ` · 벌금 ${wf.toLocaleString()}원` : " · 벌금 없음"}`;
                         return (
-                          <div key={week} title={tip} style={{ position: "relative", display: "flex", alignItems: "center", gap: 4, background: exempted ? "#1a2e05" : s.bg, border: `1px solid ${exempted ? "#3f6212" : s.border}`, borderRadius: 8, padding: "4px 8px", fontSize: 11, cursor: "help" }}>
+                          <div key={week} title={tip} style={{ display: "flex", alignItems: "center", gap: 4, background: s.bg, border: `1px solid ${s.border}`, borderRadius: 8, padding: "4px 8px", fontSize: 11, cursor: "help" }}>
                             <span style={{ color: "#64748b" }}>{label}</span>
                             <span style={{ color: s.color, fontWeight: 600 }}>{s.emoji}{count}</span>
-                            {exempted ? (
-                              <span title="면제권 사용 (클릭 시 취소)" style={{ color: "#22c55e", fontWeight: 700, cursor: "pointer" }} onClick={() => toggleExemption(member, week)}>🎫</span>
-                            ) : (
-                              <span style={{ color: "#f87171", fontWeight: 600 }}>{wf > 0 ? `${wf}` : ""}</span>
-                            )}
-                            {!exempted && count < 3 && available > 0 && (
-                              <span onClick={() => toggleExemption(member, week)}
-                                style={{ cursor: "pointer", fontSize: 10, color: "#38bdf8", textDecoration: "underline" }}>면제</span>
-                            )}
+                            {wf > 0 && <span style={{ color: "#f87171", fontWeight: 600 }}>{wf}</span>}
                           </div>
                         );
                       })}
