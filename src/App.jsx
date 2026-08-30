@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { ref, onValue, set } from "firebase/database";
 import { db } from "./firebase";
+import { buildMemberStats } from "./lib/dashboardStats";
+import {
+  getRestView,
+  isMemberResting,
+  scheduleRestChange,
+  shiftWeekKey,
+  weekKeyForKstInstant,
+} from "./lib/studyRules";
 
 // 뱃지는 숫자만 변하게 통일: 3개 미만은 ⚠️, 3개 이상은 📝. 색은 3단계(미달/진행/완료)로 구분
 const TIER = {
@@ -28,14 +36,7 @@ function weekKeyToFriday(weekKey) {
 }
 
 function getCurrentWeekKey() {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const daysBack = (now.getDay() + 2) % 7;
-  now.setDate(now.getDate() - daysBack);
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return weekKeyForKstInstant(new Date());
 }
 
 function getWeekLabel(weekKey) {
@@ -47,12 +48,7 @@ function getWeekLabel(weekKey) {
 }
 
 function shiftWeek(weekKey, delta) {
-  const friday = weekKeyToFriday(weekKey);
-  friday.setDate(friday.getDate() + delta * 7);
-  const y = friday.getFullYear();
-  const m = String(friday.getMonth() + 1).padStart(2, "0");
-  const d = String(friday.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return shiftWeekKey(weekKey, delta);
 }
 
 function formatDateKey(date) {
@@ -97,9 +93,6 @@ function getWeeksInMonth(year, month) {
   return weeks;
 }
 
-const FINE_MAP = { 0: 1000, 1: 700, 2: 400, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0, 10: 0, 11: 0, 12: 0, 13: 0, 14: 0 };
-const BONUS_3 = 800; // 3회 이상 달성 시 기본 적립금 (4회부터 100원씩 추가)
-
 // Firebase 쓰기 헬퍼
 const fbSet = (path, val) => set(ref(db, path), val);
 
@@ -107,8 +100,10 @@ export default function StudyDashboard() {
   const [members, setMembers] = useState([]);
   const [weekData, setWeekData] = useState({});
   const [rewardDecisions, setRewardDecisions] = useState({});
+  const [memberSettings, setMemberSettings] = useState({});
+  const [weekRest, setWeekRest] = useState({});
   const [dbLoaded, setDbLoaded] = useState(false);
-  const loadedRef = useRef({ members: false, weekData: false, rewardDecisions: false });
+  const loadedRef = useRef({ members: false, weekData: false, rewardDecisions: false, memberSettings: false, weekRest: false });
 
   const [viewWeek, setViewWeek] = useState(getCurrentWeekKey());
   const [newMember, setNewMember] = useState("");
@@ -139,8 +134,16 @@ export default function StudyDashboard() {
       setRewardDecisions(snap.val() || {});
       markLoaded("rewardDecisions");
     });
+    const unsubMemberSettings = onValue(ref(db, "memberSettings"), (snap) => {
+      setMemberSettings(snap.val() || {});
+      markLoaded("memberSettings");
+    });
+    const unsubWeekRest = onValue(ref(db, "weekRest"), (snap) => {
+      setWeekRest(snap.val() || {});
+      markLoaded("weekRest");
+    });
 
-    return () => { unsubMembers(); unsubWeekData(); unsubRewardDecisions(); };
+    return () => { unsubMembers(); unsubWeekData(); unsubRewardDecisions(); unsubMemberSettings(); unsubWeekRest(); };
   }, []);
 
   const settleMonthKey = getMonthKey(settleMonth.year, settleMonth.month);
@@ -214,10 +217,24 @@ export default function StudyDashboard() {
   };
 
   const getCount = (week, member) => weekData[week]?.[member] ?? null;
+  const isResting = (week, member) => isMemberResting(weekRest, week, member);
+
+  const setRestReservation = (member, desired) => {
+    const current = memberSettings[member] || { restActive: false };
+    const next = scheduleRestChange(
+      current,
+      desired,
+      typeof desired === "boolean" ? shiftWeekKey(getCurrentWeekKey(), 1) : null,
+    );
+    setMemberSettings((settings) => ({ ...settings, [member]: next }));
+    fbSet(`memberSettings/${member}`, next);
+    showToast(desired === null ? `✓ ${member} 예약 취소됨` : `✓ ${member} ${desired ? "휴식" : "복귀"} 예약됨`);
+  };
 
   const allWeeks = Array.from(new Set([
     getCurrentWeekKey(),
     ...Object.keys(weekData).filter((w) => Object.keys(weekData[w] || {}).length > 0),
+    ...Object.keys(weekRest).filter((w) => Object.keys(weekRest[w] || {}).length > 0),
   ])).sort().reverse();
 
   const heatmapWeeks = (() => {
@@ -226,7 +243,8 @@ export default function StudyDashboard() {
     return weeks;
   })();
 
-  const filledCount = members.filter((m) => getCount(viewWeek, m) !== null).length;
+  const activeViewMembers = members.filter((member) => !isResting(viewWeek, member));
+  const filledCount = activeViewMembers.filter((m) => getCount(viewWeek, m) !== null).length;
   const isCurrentWeek = viewWeek === getCurrentWeekKey();
 
   const NavBtn = ({ children, onClick, disabled }) => (
@@ -293,10 +311,10 @@ export default function StudyDashboard() {
               <div style={{ background: "#111827", borderRadius: 12, padding: "11px 14px", marginBottom: 14, border: "1px solid #1e293b" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 7 }}>
                   <span style={{ color: "#64748b" }}>입력 완료</span>
-                  <span style={{ color: "#38bdf8", fontWeight: 700 }}>{filledCount} / {members.length}명</span>
+                  <span style={{ color: "#38bdf8", fontWeight: 700 }}>{filledCount} / {activeViewMembers.length}명</span>
                 </div>
                 <div style={{ background: "#0a0f1e", borderRadius: 99, height: 6 }}>
-                  <div style={{ width: members.length ? `${(filledCount / members.length) * 100}%` : "0%", height: "100%", background: "linear-gradient(90deg,#38bdf8,#818cf8)", borderRadius: 99, transition: "width 0.4s" }} />
+                  <div style={{ width: activeViewMembers.length ? `${(filledCount / activeViewMembers.length) * 100}%` : "100%", height: "100%", background: "linear-gradient(90deg,#38bdf8,#818cf8)", borderRadius: 99, transition: "width 0.4s" }} />
                 </div>
               </div>
             )}
@@ -309,15 +327,18 @@ export default function StudyDashboard() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {members.map((member) => {
+                  const resting = isResting(viewWeek, member);
                   const count = getCount(viewWeek, member);
-                  const cfg = count !== null ? STATUS[count] : null;
+                  const cfg = !resting && count !== null ? STATUS[count] : null;
                   return (
-                    <div key={member} style={{ background: cfg ? cfg.bg : "#111827", borderRadius: 14, padding: "14px", border: `1px solid ${cfg ? cfg.border : "#1e293b"}`, transition: "all 0.2s" }}>
+                    <div key={member} style={{ background: resting ? "#172033" : cfg ? cfg.bg : "#111827", borderRadius: 14, padding: "14px", border: `1px solid ${resting ? "#475569" : cfg ? cfg.border : "#1e293b"}`, transition: "all 0.2s" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                         <span style={{ fontWeight: 700, fontSize: 15 }}>{member}</span>
-                        {cfg && <span style={{ color: cfg.color, fontSize: 13, fontWeight: 700 }}>{cfg.emoji} {cfg.text}</span>}
+                        {resting
+                          ? <span style={{ color: "#94a3b8", fontSize: 13, fontWeight: 700 }}>💤 휴식</span>
+                          : cfg && <span style={{ color: cfg.color, fontSize: 13, fontWeight: 700 }}>{cfg.emoji} {cfg.text}</span>}
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {!resting && <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         {[[0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10, 11, 12, 13, 14]].map((row, ri) => (
                           <div key={ri} style={{ display: "flex", gap: 7 }}>
                             {row.map((n) => {
@@ -332,7 +353,7 @@ export default function StudyDashboard() {
                             })}
                           </div>
                         ))}
-                      </div>
+                      </div>}
                     </div>
                   );
                 })}
@@ -357,6 +378,10 @@ export default function StudyDashboard() {
               <div style={{ display: "flex", alignItems: "center", gap: 5, background: "#111827", borderRadius: 8, padding: "5px 10px", border: "1px solid #1e293b" }}>
                 <div style={{ width: 14, height: 14, borderRadius: 3, background: "#1e293b", border: "1px solid #334155" }} />
                 <span style={{ fontSize: 12, color: "#475569" }}>미입력</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, background: "#172033", borderRadius: 8, padding: "5px 10px", border: "1px solid #475569" }}>
+                <span style={{ fontSize: 14 }}>💤</span>
+                <span style={{ fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>휴식</span>
               </div>
             </div>
 
@@ -388,18 +413,19 @@ export default function StudyDashboard() {
                       <tr key={member}>
                         <td style={{ padding: "5px 10px", fontSize: 13, fontWeight: 600, color: "#cbd5e1", whiteSpace: "nowrap" }}>{member}</td>
                         {heatmapWeeks.map((w) => {
+                          const resting = isResting(w, member);
                           const c = getCount(w, member);
-                          const s = c !== null ? STATUS[c] : null;
+                          const s = !resting && c !== null ? STATUS[c] : null;
                           const isCur = w === getCurrentWeekKey();
                           return (
                             <td key={w} style={{ padding: "3px", textAlign: "center" }}>
                               <div
                                 onClick={() => { setViewWeek(w); setTab("current"); }}
-                                style={{ width: 34, height: 34, borderRadius: 8, background: s ? s.color : "#1e293b", margin: "0 auto", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: isCur ? "2px solid #38bdf8" : "2px solid transparent", opacity: s ? 1 : 0.35, transition: "transform 0.1s" }}
+                                style={{ width: 34, height: 34, borderRadius: 8, background: resting ? "#334155" : s ? s.color : "#1e293b", margin: "0 auto", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: isCur ? "2px solid #38bdf8" : resting ? "2px solid #475569" : "2px solid transparent", opacity: resting || s ? 1 : 0.35, transition: "transform 0.1s" }}
                                 onMouseOver={e => e.currentTarget.style.transform = "scale(1.2)"}
                                 onMouseOut={e => e.currentTarget.style.transform = "scale(1)"}
                               >
-                                {s ? s.emoji : ""}
+                                {resting ? "💤" : s ? s.emoji : ""}
                               </div>
                             </td>
                           );
@@ -417,7 +443,7 @@ export default function StudyDashboard() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 8 }}>
                   {[14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map(n => {
                     const s = STATUS[n];
-                    const cnt = members.filter(m => getCount(getCurrentWeekKey(), m) === n).length;
+                    const cnt = members.filter(m => !isResting(getCurrentWeekKey(), m) && getCount(getCurrentWeekKey(), m) === n).length;
                     return (
                       <div key={n} style={{ textAlign: "center", background: s.bg, border: `1px solid ${s.border}`, borderRadius: 12, padding: "10px 4px" }}>
                         <div style={{ fontSize: 18 }}>{s.emoji}</div>
@@ -433,19 +459,7 @@ export default function StudyDashboard() {
         )}
 
         {tab === "settle" && (() => {
-          const memberStats = members.map((member) => {
-            let fine = 0, bonus = 0, details = [];
-            settleWeeks.forEach((w) => {
-              const c = getCount(w, member);
-              if (c === null) return;
-              const weekFine = FINE_MAP[c] ?? 0;
-              const weekBonus = c >= 3 ? BONUS_3 + (c - 3) * 100 : 0;
-              fine += weekFine;
-              bonus += weekBonus;
-              details.push({ week: w, count: c, fine: weekFine, bonus: weekBonus });
-            });
-            return { member, fine, bonus, details };
-          });
+          const memberStats = buildMemberStats({ members, weeks: settleWeeks, weekData, weekRest });
           const totalFine = memberStats.reduce((s, m) => s + m.fine, 0);
           const totalBonus = memberStats.reduce((s, m) => s + m.bonus, 0);
           const totalPool = totalFine + totalBonus;
@@ -471,11 +485,11 @@ export default function StudyDashboard() {
               : { member: row.member, amount: row.bonus, status: "carry", consumedCarryover: 0 });
           };
 
-          const monthlyPerfect = members.map((member, index) => ({
-            member,
+          const monthlyPerfect = memberStats.map((stats, index) => ({
+            member: stats.member,
             index,
-            count: settleWeeks.filter((w) => (getCount(w, member) ?? -1) >= 3).length,
-            totalCount: settleWeeks.reduce((sum, w) => sum + (getCount(w, member) ?? 0), 0),
+            count: stats.completedWeeks,
+            totalCount: stats.totalCount,
           })).sort((a, b) => (b.count - a.count) || (b.totalCount - a.totalCount) || (a.index - b.index));
           const rankedMembers = monthlyPerfect.filter((m) => m.count > 0);
           const top1 = rankedMembers[0] || null;
@@ -777,6 +791,7 @@ export default function StudyDashboard() {
                       </div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                         {members.map((m) => {
+                          if (isResting(week, m)) return <div key={m} style={{ background: "#172033", border: "1px solid #475569", borderRadius: 8, padding: "4px 9px", fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>{m} 💤휴식</div>;
                           const c = getCount(week, m);
                           if (c === null) return <div key={m} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "4px 9px", fontSize: 12, color: "#475569" }}>{m} · -</div>;
                           const s = STATUS[c];
@@ -800,13 +815,31 @@ export default function StudyDashboard() {
                   <div>아직 멤버가 없어요</div>
                 </div>
               )}
-              {members.map((m) => (
-                <div key={m} style={{ background: "#111827", borderRadius: 12, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", border: "1px solid #1e293b" }}>
-                  <span style={{ fontWeight: 600, fontSize: 15 }}>👤 {m}</span>
-                  <button onClick={() => removeMember(m)}
-                    style={{ background: "#3f0f0f", border: "1px solid #7f1d1d", borderRadius: 8, color: "#f87171", padding: "6px 12px", cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>삭제</button>
-                </div>
-              ))}
+              {members.map((m) => {
+                const restView = getRestView(memberSettings[m]);
+                const view = {
+                  active: { text: "활동 중", action: "휴식 예약", desired: true, color: "#22c55e" },
+                  "pending-rest": { text: "다음 주부터 휴식", action: "예약 취소", desired: null, color: "#f59e0b" },
+                  resting: { text: "휴식 중", action: "복귀 예약", desired: false, color: "#94a3b8" },
+                  "pending-return": { text: "다음 주부터 복귀", action: "예약 취소", desired: null, color: "#38bdf8" },
+                }[restView];
+                return (
+                  <div key={m} style={{ background: "#111827", borderRadius: 12, padding: "14px 16px", border: "1px solid #1e293b" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 15 }}>👤 {m}</div>
+                        <div style={{ color: view.color, fontSize: 11, fontWeight: 700, marginTop: 4 }}>{view.text}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => setRestReservation(m, view.desired)}
+                          style={{ background: "#172033", border: `1px solid ${view.color}`, borderRadius: 8, color: view.color, padding: "6px 10px", cursor: "pointer", fontSize: 12, fontWeight: 700, fontFamily: "inherit" }}>{view.action}</button>
+                        <button onClick={() => removeMember(m)}
+                          style={{ background: "#3f0f0f", border: "1px solid #7f1d1d", borderRadius: 8, color: "#f87171", padding: "6px 10px", cursor: "pointer", fontSize: 12, fontFamily: "inherit" }}>삭제</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             {!showAdd ? (
               <button onClick={() => setShowAdd(true)}

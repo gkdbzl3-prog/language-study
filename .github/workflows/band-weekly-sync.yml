@@ -1,0 +1,32 @@
+name: BAND weekly sync
+
+on:
+  schedule:
+    - cron: "10 15 * * 4"
+  workflow_dispatch:
+
+concurrency:
+  group: band-weekly-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - name: Sync the just-closed BAND week
+        run: pnpm sync:band
+        env:
+          BAND_ACCESS_TOKEN: ${{ secrets.BAND_ACCESS_TOKEN }}
+          BAND_KEY: ${{ secrets.BAND_KEY }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}

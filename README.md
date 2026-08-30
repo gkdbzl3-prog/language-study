@@ -35,6 +35,17 @@ fly.toml의 `app = "study-dashboard"` 부분을 원하는 이름으로 변경
 
 ---
 
-## 주의: 데이터는 localStorage에 저장됩니다
-- 같은 브라우저/기기에서만 데이터 유지
-- 여러 기기에서 공유하려면 추후 DB(예: Supabase) 연동 필요
+## BAND 주간 자동 집계
+
+매주 한국 시간 금요일 00:10에 직전 금~목 게시글을 BAND Open API에서 집계해 Firebase Realtime Database에 반영합니다. BAND Developers에서 앱을 만들고 대상 밴드를 연결한 뒤, GitHub 저장소의 `Settings → Secrets and variables → Actions`에 다음 Repository secrets를 등록하세요.
+
+- `BAND_ACCESS_TOKEN`: BAND Open API 액세스 토큰
+- `BAND_KEY`: 집계할 밴드 키
+- `FIREBASE_SERVICE_ACCOUNT`: Firebase 서비스 계정 JSON 전체
+- `FIREBASE_DATABASE_URL`: Realtime Database URL
+
+비밀값은 프론트엔드용 `VITE_` 환경변수나 저장소 파일에 넣지 않습니다.
+
+설정 후 Actions의 `BAND weekly sync`에서 `Run workflow`를 한 번 실행해 최초 회원 매핑을 만듭니다. 성공 여부와 처리량은 Firebase의 `syncMeta/{weekKey}`에서 확인할 수 있습니다. 예약 실행은 직전 종료 주차만 갱신하지만, 같은 주차에 수동 재실행하면 BAND 원본 집계값으로 해당 주의 관리자 수동 수정값을 덮어씁니다.
+
+로컬에서 실제 동기화를 실행하려면 위 네 환경변수가 모두 필요합니다. 비밀값 없이도 계산 테스트와 프론트엔드 빌드는 실행할 수 있습니다.
