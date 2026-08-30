@@ -21,8 +21,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-      # package.json uses exact versions; refresh the lock when sync-only dependencies change.
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - name: Sync the just-closed BAND week
         run: pnpm sync:band
